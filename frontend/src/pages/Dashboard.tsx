@@ -255,6 +255,21 @@ function PeTeacherDashboard({ user }: { user: User }) {
     return () => controller.abort();
   }, [user.id, user.isVerified, refresh]);
 
+  useEffect(() => {
+    if (!user.isVerified) return;
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') setRefresh((current) => current + 1);
+    };
+    const poll = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener('focus', refreshWhenVisible);
+    document.addEventListener('visibilitychange', refreshWhenVisible);
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('focus', refreshWhenVisible);
+      document.removeEventListener('visibilitychange', refreshWhenVisible);
+    };
+  }, [user.isVerified]);
+
   async function verifyAthlete(profile: Athlete) {
     setActiveId(profile.id);
     setError('');
