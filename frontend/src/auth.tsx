@@ -1,11 +1,11 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { ApiError, api, clearSession, getSavedUser, saveSession, type User } from './api';
-import { useEffect } from 'react';
+import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from 'react';
+import { ApiError, api, clearSession, getSavedUser, getToken, refreshAccessToken, saveLocalUser, saveSession, sessionExpiredEvent, sessionRestoredEvent, type User } from './api';
 
 type Credentials = { email: string; password: string };
 type Registration = Credentials & { username: string; role: 'talent' | 'host' | 'pe_teacher'; institutionName?: string; district?: string };
 type AuthContextValue = {
   user: User | null;
+  isInitializing: boolean;
   signIn: (credentials: Credentials) => Promise<User>;
   signUp: (details: Registration) => Promise<void>;
   signOut: () => Promise<void>;
@@ -29,8 +29,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function fetchCurrentUser() {
     try {
-      const userData = await api<User>('/me');
+      const response = await api<User | { user: User }>('/me');
+      const userData = response && typeof response === 'object' && 'user' in response && response.user
+        ? response.user
+        : (response as User);
       setUser(userData);
+      saveLocalUser(userData);
+      const token = getToken();
+      if (token) saveSession(userData, token);
       return userData;
     } catch (requestError) {
       const sessionInvalid = requestError instanceof ApiError
@@ -44,15 +50,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    if (initialized) return;
-    if (user) {
-      fetchCurrentUser().catch(() => {});
+    let active = true;
+
+    async function initSession() {
+      const token = getToken();
+      const savedUser = getSavedUser();
+      if (savedUser || token) {
+        try {
+          await fetchCurrentUser();
+        } catch {
+          // fetchCurrentUser handles session clearing on auth error
+        }
+      } else {
+        try {
+          const refreshedToken = await refreshAccessToken();
+          if (refreshedToken && active) {
+            const restoredUser = getSavedUser();
+            if (restoredUser) setUser(restoredUser);
+          }
+        } catch {
+          // Guest user or no refresh cookie
+        }
+      }
+      if (active) setInitialized(true);
     }
-    setInitialized(true);
-  }, [initialized]);
+
+    void initSession();
+
+    const handleExpired = () => {
+      setUser(null);
+      clearSession();
+    };
+    const handleRestored = () => {
+      const saved = getSavedUser();
+      if (saved) setUser(saved);
+    };
+    window.addEventListener(sessionExpiredEvent, handleExpired);
+    window.addEventListener(sessionRestoredEvent, handleRestored);
+
+    return () => {
+      active = false;
+      window.removeEventListener(sessionExpiredEvent, handleExpired);
+      window.removeEventListener(sessionRestoredEvent, handleRestored);
+    };
+  }, []);
 
   const value = useMemo<AuthContextValue>(() => ({
     user,
+    isInitializing: !initialized,
     signIn: (credentials) => authenticate('/login', credentials),
     signUp: async (details) => { await authenticate('/register', details); },
     signOut: async () => {
@@ -63,7 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
       }
     },
-  }), [user]);
+  }), [user, initialized]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -91,16 +91,20 @@ function publicUser(user: {
   hostVerificationStatus: string;
   isVerified?: boolean | null;
   verificationMethod?: VerificationMethod | null;
+  district?: string | null;
+  institutionName?: string | null;
 }) {
   return {
     id: user.id,
     username: user.username,
     email: user.email,
     role: user.role,
+    ...(user.district ? { district: user.district } : {}),
     ...(user.role === 'host' ? { hostVerificationStatus: user.hostVerificationStatus } : {}),
     ...(['host', 'pe_teacher'].includes(user.role) ? {
       isVerified: user.isVerified ?? (user.role === 'host' && user.hostVerificationStatus === 'verified'),
       verificationMethod: user.verificationMethod ?? (user.role === 'host' && user.hostVerificationStatus === 'verified' ? 'manual_approved' : undefined),
+      ...(user.role === 'pe_teacher' ? { institutionName: user.institutionName } : {}),
     } : {}),
   };
 }
@@ -123,11 +127,12 @@ function fullUser(user: {
     username: user.username,
     email: user.email,
     role: user.role,
+    ...(user.district ? { district: user.district } : {}),
     ...(user.role === 'host' ? { hostVerificationStatus: user.hostVerificationStatus } : {}),
     ...(['host', 'pe_teacher'].includes(user.role) ? {
       isVerified: user.isVerified ?? (user.role === 'host' && user.hostVerificationStatus === 'verified'),
       verificationMethod: user.verificationMethod ?? (user.role === 'host' && user.hostVerificationStatus === 'verified' ? 'manual_approved' : undefined),
-      ...(user.role === 'pe_teacher' ? { institutionName: user.institutionName, district: user.district } : {}),
+      ...(user.role === 'pe_teacher' ? { institutionName: user.institutionName } : {}),
     } : {}),
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
@@ -149,15 +154,30 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
     verificationMethod = isVerified ? 'domain_auto' : 'pending_review';
   }
 
+  const trimmedDistrict = district?.trim() || undefined;
   const user = await User.create({
     username,
     email: normalizedEmail,
     passwordHash,
     role,
+    ...(trimmedDistrict ? { district: trimmedDistrict } : {}),
     ...(role !== 'talent' ? { isVerified, verificationMethod } : {}),
     ...(role === 'host' ? { hostVerificationStatus: isVerified ? 'verified' : 'pending' } : {}),
-    ...(role === 'pe_teacher' ? { institutionName, district } : {}),
+    ...(role === 'pe_teacher' ? { institutionName: institutionName?.trim() } : {}),
   });
+
+  if (role === 'talent' && trimmedDistrict) {
+    await AthleteProfile.create({
+      user: user._id,
+      fullName: username,
+      age: 18,
+      sport: 'Athletics',
+      district: trimmedDistrict,
+      region: trimmedDistrict,
+      verificationStatus: 'pending',
+    });
+  }
+
   const accessToken = await establishSession(user, res);
   sendSuccess(res, { user: fullUser(user), accessToken }, 201);
 });
@@ -203,7 +223,7 @@ router.post('/refresh', authLimiter, async (req, res) => {
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
   }
 
-  sendSuccess(res, { user: publicUser(user), accessToken: makeAccessToken(user) });
+  sendSuccess(res, { user: fullUser(user), accessToken: makeAccessToken(user) });
 });
 
 router.post('/logout', async (req, res) => {

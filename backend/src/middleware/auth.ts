@@ -5,7 +5,7 @@ import { User } from '../models/User.js';
 import { HttpError } from '../utils/http.js';
 
 export interface AuthenticatedRequest extends Request {
-  authUser?: { id: string; role: 'talent' | 'host' | 'admin' | 'pe_teacher'; hostVerified: boolean; peVerified: boolean };
+  authUser?: { id: string; role: 'talent' | 'host' | 'admin' | 'pe_teacher'; peVerified: boolean };
 }
 
 export async function requireAuth(
@@ -28,26 +28,14 @@ export async function requireAuth(
     throw new HttpError(401, 'INVALID_TOKEN', 'The access token is invalid or expired.');
   }
 
-  const user = await User.findById(payload.sub).select('_id role hostVerificationStatus isVerified');
+  const user = await User.findById(payload.sub).select('_id role isVerified');
   if (!user) throw new HttpError(401, 'INVALID_TOKEN', 'The access token is invalid or expired.');
   req.authUser = {
     id: user.id,
     role: user.role as 'talent' | 'host' | 'admin' | 'pe_teacher',
-    hostVerified: user.hostVerificationStatus === 'verified',
     peVerified: (user as any).isVerified === true,
   };
   next();
-}
-
-export function requireVerifiedScoutOrAdmin() {
-  return (req: AuthenticatedRequest, _res: Response, next: NextFunction): void => {
-    if (!req.authUser || (req.authUser.role !== 'admin' && (
-      req.authUser.role !== 'host' || !req.authUser.hostVerified
-    ))) {
-      throw new HttpError(403, 'FORBIDDEN', 'A verified host or admin account is required.');
-    }
-    next();
-  };
 }
 
 export function requireRoles(...roles: Array<'talent' | 'host' | 'admin' | 'pe_teacher'>) {
@@ -59,15 +47,12 @@ export function requireRoles(...roles: Array<'talent' | 'host' | 'admin' | 'pe_t
   };
 }
 
-export function requireVerifiedRole(role: 'pe_teacher' | 'host') {
+export function requireVerifiedRole(role: 'pe_teacher') {
   return (req: AuthenticatedRequest, _res: Response, next: NextFunction): void => {
     if (!req.authUser || req.authUser.role !== role) {
       throw new HttpError(403, 'FORBIDDEN', `This action requires the ${role} role.`);
     }
     if (role === 'pe_teacher' && !req.authUser.peVerified) {
-      throw new HttpError(403, 'VERIFICATION_REQUIRED', 'Your account must be verified to perform this action.');
-    }
-    if (role === 'host' && !req.authUser.hostVerified) {
       throw new HttpError(403, 'VERIFICATION_REQUIRED', 'Your account must be verified to perform this action.');
     }
     next();

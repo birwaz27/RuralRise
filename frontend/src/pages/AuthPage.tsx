@@ -1,4 +1,4 @@
-import { ArrowLeft, ArrowRight, Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ChevronDown, Eye, EyeOff, ShieldCheck, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api';
@@ -12,7 +12,8 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [role, setRole] = useState<'talent' | 'host' | 'pe_teacher'>('talent');
+  const [role, setRole] = useState<'talent' | 'host' | 'pe_teacher' | null>(null);
+  const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const [institutionName, setInstitutionName] = useState('');
   const [district, setDistrict] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -22,6 +23,10 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
+    if (isRegister && !role) {
+      setError('Please select how you’d like to join.');
+      return;
+    }
     setLoading(true);
     try {
       if (isRegister) {
@@ -29,8 +34,9 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
           username,
           email,
           password,
-          role,
-          ...(role === 'pe_teacher' ? { institutionName, district } : {}),
+          role: role ?? 'talent',
+          ...(role === 'talent' || role === 'pe_teacher' ? { district: district.trim() } : {}),
+          ...(role === 'pe_teacher' ? { institutionName: institutionName.trim() } : {}),
         });
       } else {
         await signIn({ email, password });
@@ -66,7 +72,10 @@ export default function AuthPage({ mode }: { mode: 'login' | 'register' }) {
             {isRegister && <label className="field-label">USERNAME<input autoComplete="username" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="How should we call you?" minLength={3} maxLength={40} required /></label>}
             <label className="field-label">{isRegister ? 'EMAIL ADDRESS' : 'EMAIL ADDRESS'}<input type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder={isRegister ? role === 'pe_teacher' ? 'Institutional email' : 'you@example.com' : 'you@gmail.com'} maxLength={254} required /></label>
             <label className="field-label">PASSWORD<span className="password-field"><input type={showPassword ? 'text' : 'password'} autoComplete={isRegister ? 'new-password' : 'current-password'} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={isRegister ? 'At least 8 characters' : 'Enter your password'} minLength={8} maxLength={72} required /><button type="button" className="password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword(!showPassword)}>{showPassword ? <EyeOff size={17} /> : <Eye size={17} />}</button></span>{isRegister && <span className="field-hint">Use at least 8 characters to keep your account secure.</span>}</label>
-            {isRegister && <fieldset className="role-selector"><legend>I’M HERE AS A…</legend><label className={`role-option${role === 'talent' ? ' selected' : ''}`}><input type="radio" name="role" value="talent" checked={role === 'talent'} onChange={() => setRole('talent')} /><span className="role-mark">01</span><span><b>Athlete</b><small>Showcase your talent</small></span><span className="role-radio" /></label><label className={`role-option${role === 'host' ? ' selected' : ''}`}><input type="radio" name="role" value="host" checked={role === 'host'} onChange={() => setRole('host')} /><span className="role-mark">02</span><span><b>Scout / host</b><small>Find the next big thing</small></span><span className="role-radio" /></label><label className={`role-option${role === 'pe_teacher' ? ' selected' : ''}`}><input type="radio" name="role" value="pe_teacher" checked={role === 'pe_teacher'} onChange={() => setRole('pe_teacher')} /><span className="role-mark">03</span><span><b>PE Teacher</b><small>Endorse local athletes</small></span><span className="role-radio" /></label></fieldset>}
+            {isRegister && <fieldset className="role-selector"><legend>I’M HERE AS A…</legend><div className="role-picker"><button type="button" className="role-option role-picker-trigger" aria-expanded={roleMenuOpen} aria-controls="role-picker-options" onClick={() => setRoleMenuOpen(!roleMenuOpen)}><span className="role-mark">{role === 'talent' ? '01' : role === 'host' ? '02' : role === 'pe_teacher' ? '03' : '—'}</span><span><b>{role === 'talent' ? 'Athlete' : role === 'host' ? 'Scout / host' : role === 'pe_teacher' ? 'PE Teacher' : 'Select your role'}</b><small>{role === 'talent' ? 'Showcase your talent' : role === 'host' ? 'Find the next big thing' : role === 'pe_teacher' ? 'Endorse local athletes' : 'Choose how you’ll use RuralRise'}</small></span><span className="role-picker-arrow"><ChevronDown size={17} /></span></button>{roleMenuOpen && <div className="role-picker-options" id="role-picker-options">{([{ value: 'talent', number: '01', title: 'Athlete', description: 'Showcase your talent' }, { value: 'host', number: '02', title: 'Scout / host', description: 'Find the next big thing' }, { value: 'pe_teacher', number: '03', title: 'PE Teacher', description: 'Endorse local athletes' }] as const).map((option) => <button type="button" key={option.value} className={`role-option${role === option.value ? ' selected' : ''}`} aria-pressed={role === option.value} onClick={() => { setRole(option.value); setRoleMenuOpen(false); setError(''); }}><span className="role-mark">{option.number}</span><span><b>{option.title}</b><small>{option.description}</small></span><span className="role-radio"><ArrowRight size={14} /></span></button>)}</div>}</div></fieldset>}
+            {isRegister && role === 'talent' && (
+              <label className="field-label">DISTRICT<input value={district} onChange={(event) => setDistrict(event.target.value)} placeholder="e.g. Wayanad" maxLength={100} required /><span className="field-hint">Connect with local PE teachers and sports scouts in your district.</span></label>
+            )}
             {isRegister && role === 'pe_teacher' && (
               <>
                 <label className="field-label">INSTITUTIONAL NAME<input value={institutionName} onChange={(event) => setInstitutionName(event.target.value)} placeholder="e.g. Government Higher Secondary School" maxLength={100} required /></label>
