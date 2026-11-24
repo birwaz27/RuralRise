@@ -12,6 +12,12 @@ const achievementPostSchema = new Schema(
     hasVideo: { type: Boolean, default: false, required: true },
     video: { type: Buffer, select: false },
     videoContentType: { type: String, select: false },
+    hasCertificate: { type: Boolean, default: false, required: true },
+    certificate: { type: Buffer, select: false },
+    certificateContentType: { type: String, select: false },
+    verificationStatus: { type: String, enum: ['pending', 'verified', 'rejected'], default: 'pending', required: true },
+    verifiedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    verificationNotes: { type: String, trim: true, maxlength: 500 },
     endorsementStatus: { type: String, enum: ['unverified', 'endorsed', 'correction_requested'], default: 'unverified' },
     endorsedBy: { type: Schema.Types.ObjectId, ref: 'User' },
     endorsementNote: { type: String, maxlength: 500 },
@@ -21,6 +27,7 @@ const achievementPostSchema = new Schema(
 
 achievementPostSchema.index({ createdAt: -1 });
 achievementPostSchema.index({ athlete: 1, createdAt: -1 });
+achievementPostSchema.index({ verificationStatus: 1, createdAt: -1 });
 
 export type AchievementPostDocument = InferSchemaType<typeof achievementPostSchema> & mongoose.Document;
 export const AchievementPost = mongoose.model('AchievementPost', achievementPostSchema);

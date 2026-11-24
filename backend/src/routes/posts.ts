@@ -7,6 +7,8 @@ import { AthleteProfile, type AthleteProfileDocument } from '../models/AthletePr
 import { requireAuth, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { HttpError, sendSuccess } from '../utils/http.js';
+import { User } from '../models/User.js';
+import { Event } from '../models/Event.js';
 
 const router = Router();
 const upload = multer({
@@ -15,6 +17,16 @@ const upload = multer({
   fileFilter: (_req, file, callback) => {
     if (!['image/png', 'image/jpeg', 'video/mp4', 'video/webm'].includes(file.mimetype)) {
       callback(new HttpError(400, 'INVALID_MEDIA_TYPE', 'Choose a PNG, JPG, MP4, or WebM file.'));
+      return;
+    }
+    callback(null, true);
+  },
+});
+const certificateUpload = multer({
+  storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, callback) => {
+    if (!['application/pdf', 'image/png', 'image/jpeg'].includes(file.mimetype)) {
+      callback(new HttpError(400, 'INVALID_CERTIFICATE_TYPE', 'Upload a PDF, PNG, or JPG certificate.'));
       return;
     }
     callback(null, true);
@@ -67,6 +79,10 @@ export function serializePost(post: PopulatedPost) {
     createdAt: post.createdAt,
     endorsementStatus: post.endorsementStatus,
     endorsementNote: post.endorsementNote ?? null,
+    verificationStatus: post.verificationStatus,
+    verificationNotes: post.verificationNotes ?? null,
+    hasCertificate: post.hasCertificate,
+    certificateUrl: post.hasCertificate && post.verificationStatus === 'verified' ? `/api/posts/${post._id}/certificate` : null,
     photoUrl: post.hasPhoto ? `/api/posts/${post._id}/photo?v=${post.updatedAt.getTime()}` : null,
     videoUrl: post.hasVideo ? `/api/posts/${post._id}/video?v=${post.updatedAt.getTime()}` : null,
     mediaType: post.hasVideo ? 'video' : 'image',
@@ -128,6 +144,62 @@ router.get('/mine', requireAuth, requireRoles('talent'), async (req: Authenticat
     return;
   }
   sendSuccess(res, await getPosts({ athlete: profile._id }, parsed.data.page, parsed.data.limit));
+});
+
+router.post('/:id/certificate', requireAuth, requireRoles('talent'), certificateUpload.single('certificate'), async (req: AuthenticatedRequest, res) => {
+  const id = req.params.id;
+  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'INVALID_ID', 'The supplied achievement ID is invalid.');
+  const profile = await AthleteProfile.findOne({ user: req.authUser!.id }).select('_id');
+  const post = profile ? await AchievementPost.findOne({ _id: id, athlete: profile._id }).select('+certificate +certificateContentType') : null;
+  if (!post) throw new HttpError(404, 'POST_NOT_FOUND', 'The achievement was not found on your profile.');
+  const file = req.file;
+  if (!file) throw new HttpError(400, 'CERTIFICATE_REQUIRED', 'Choose a PDF, PNG, or JPG certificate.');
+  const validPdf = file.mimetype === 'application/pdf' && file.buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  const validPng = file.mimetype === 'image/png' && file.buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  const validJpeg = file.mimetype === 'image/jpeg' && file.buffer[0] === 0xff && file.buffer[1] === 0xd8 && file.buffer[2] === 0xff;
+  if (!validPdf && !validPng && !validJpeg) throw new HttpError(400, 'INVALID_CERTIFICATE', 'The uploaded file is not a valid PDF or image.');
+  post.certificate = file.buffer;
+  post.certificateContentType = file.mimetype;
+  post.hasCertificate = true;
+  post.verificationStatus = 'pending';
+  post.verifiedBy = undefined;
+  post.verificationNotes = undefined;
+  await post.save();
+  sendSuccess(res, { certificateUrl: `/api/posts/${post.id}/certificate`, verificationStatus: post.verificationStatus }, 201);
+});
+
+router.get('/:id/certificate', requireAuth, async (req: AuthenticatedRequest, res) => {
+  const id = req.params.id;
+  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'INVALID_ID', 'The supplied achievement ID is invalid.');
+  const post = await AchievementPost.findById(id).select('+certificate +certificateContentType');
+  if (!post?.certificate || !post.certificateContentType) throw new HttpError(404, 'CERTIFICATE_NOT_FOUND', 'No certificate was found.');
+  const profile = await AthleteProfile.findById(post.athlete).select('_id user district');
+  if (!profile) throw new HttpError(404, 'ATHLETE_NOT_FOUND', 'The athlete profile was not found.');
+  let allowed = profile.user.toString() === req.authUser!.id;
+  if (req.authUser!.role === 'pe_teacher') {
+    const teacher = await User.findById(req.authUser!.id).select('isVerified district');
+    allowed ||= teacher?.isVerified === true && !!teacher.district && teacher.district.trim().toLowerCase() === profile.district.trim().toLowerCase();
+  } else if (req.authUser!.role === 'host') {
+    const scout = await User.findById(req.authUser!.id).select('isVerified hostVerificationStatus');
+    const verified = scout?.isVerified === true || scout?.hostVerificationStatus === 'verified';
+    const event = verified ? await Event.exists({ createdBy: req.authUser!.id, 'applicants.player': profile._id }) : null;
+    allowed ||= Boolean(event);
+  }
+  if (!allowed) throw new HttpError(403, 'FORBIDDEN', 'You do not have permission to view this certificate.');
+  res.type(post.certificateContentType).set('Cache-Control', 'private, no-store').send(post.certificate);
+});
+
+router.get('/:id', async (req, res) => {
+  const id = req.params.id;
+  if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) {
+    throw new HttpError(400, 'INVALID_ID', 'The supplied achievement ID is invalid.');
+  }
+  const post = await AchievementPost.findById(id)
+    .populate<{ athlete: PostAuthor | null }>('athlete', 'fullName sport district region verificationStatus');
+  if (!post) throw new HttpError(404, 'POST_NOT_FOUND', 'The achievement was not found.');
+  const serialized = serializePost(post);
+  if (!serialized) throw new HttpError(500, 'POST_AUTHOR_MISSING', 'The achievement author could not be loaded.');
+  sendSuccess(res, serialized);
 });
 
 router.post('/', requireAuth, requireRoles('talent'), upload.single('photo'), validateBody(postSchema), async (req: AuthenticatedRequest, res) => {

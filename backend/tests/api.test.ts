@@ -1,4 +1,5 @@
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createApp } from '../src/app.js';
@@ -108,6 +109,14 @@ describe('Talent Hub API', () => {
     expect(created.body.data.eventDate).toBe('2025-03-16T00:00:00.000Z');
     expect(created.body.data.photoUrl).toMatch(new RegExp(`^/api/posts/${created.body.data.id as string}/photo\\?v=\\d+$`));
 
+    const achievementDetails = await request(app).get(`/api/posts/${created.body.data.id as string}`);
+    expect(achievementDetails.status).toBe(200);
+    expect(achievementDetails.body.data).toMatchObject({
+      title: 'First place in the district final',
+      description: 'Won the 100m final after a personal-best run.',
+      athlete: { fullName: 'Asha Runner', sport: 'Athletics' },
+    });
+
     const photo = await request(app).get(created.body.data.photoUrl as string);
     expect(photo.status).toBe(200);
     expect(photo.headers['content-type']).toContain('image/png');
@@ -216,6 +225,11 @@ describe('Talent Hub API', () => {
     expect(registration.body.success).toBe(true);
     expect(registration.body.data.accessToken).toBeTypeOf('string');
     expect(registration.body.data.user).not.toHaveProperty('passwordHash');
+
+    const storedUser = await User.findById(registration.body.data.user.id).select('+passwordHash');
+    if (!storedUser) throw new Error('Registered user was not persisted.');
+    expect(storedUser.passwordHash).not.toBe('secure-password');
+    expect(await bcrypt.compare('secure-password', storedUser.passwordHash)).toBe(true);
 
     const token = registration.body.data.accessToken as string;
     const profile = await request(app)
@@ -352,7 +366,7 @@ describe('Talent Hub API', () => {
     expect(tooLarge.body.error.code).toBe('FILE_TOO_LARGE');
   });
 
-  it('allows an organization-domain scout to verify profiles and shortlist them', async () => {
+  it('allows admins to verify profiles while scouts can shortlist them', async () => {
     const host = await request(app).post('/api/register').send({
       username: 'scout_one',
       email: 'scout@sai.gov.in',
@@ -378,12 +392,6 @@ describe('Talent Hub API', () => {
     const profileId = created.body.data.id as string;
     const hostToken = host.body.data.accessToken as string;
 
-    const pendingHostVerify = await request(app)
-      .put(`/api/athletes/${profileId}/verification`)
-      .set('Authorization', `Bearer ${hostToken}`)
-      .send({ status: 'verified' });
-    expect(pendingHostVerify.status).toBe(200);
-
     const admin = await User.create({
       username: 'test_admin',
       email: 'admin@example.com',
@@ -405,11 +413,18 @@ describe('Talent Hub API', () => {
       verificationMethod: 'manual_approved',
     });
 
-    const verified = await request(app)
+    const hostVerify = await request(app)
       .put(`/api/athletes/${profileId}/verification`)
       .set('Authorization', `Bearer ${hostToken}`)
       .send({ status: 'verified' });
-    expect(verified.body.data.verificationStatus).toBe('verified');
+    expect(hostVerify.status).toBe(403);
+
+    const adminVerify = await request(app)
+      .put(`/api/athletes/${profileId}/verification`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'verified' });
+    expect(adminVerify.status).toBe(200);
+    expect(adminVerify.body.data.verificationStatus).toBe('verified');
 
     const shortlisted = await request(app)
       .post('/api/athletes/shortlist')
@@ -442,7 +457,7 @@ describe('Talent Hub API', () => {
     expect(response.body.data.status).toBe('accepted');
   });
 
-  it('lets pending scouts use scouting features without granting verification or admin access', async () => {
+  it('lets unverified scouts use scouting features but not verify athletes or access admin routes', async () => {
     const pendingScout = await request(app).post('/api/register').send({
       username: 'pending_scout', email: 'scout@example.com', password: 'secure-password', role: 'host',
     });
@@ -463,9 +478,13 @@ describe('Talent Hub API', () => {
       .post('/api/athletes')
       .set('Authorization', `Bearer ${player.body.data.accessToken}`)
       .send({ fullName: 'Scout Prospect', age: 20, sport: 'Running', district: 'North', region: 'North' });
-    await AthleteProfile.findByIdAndUpdate(profile.body.data.id, { verificationStatus: 'verified' });
-
     const scoutToken = pendingScout.body.data.accessToken as string;
+    await AthleteProfile.findByIdAndUpdate(profile.body.data.id, { verificationStatus: 'verified' });
+    expect((await request(app)
+      .put(`/api/athletes/${profile.body.data.id}/verification`)
+      .set('Authorization', `Bearer ${scoutToken}`)
+      .send({ status: 'verified' })).status).toBe(403);
+
     const shortlisted = await request(app)
       .post('/api/athletes/shortlist')
       .set('Authorization', `Bearer ${scoutToken}`)
@@ -493,10 +512,6 @@ describe('Talent Hub API', () => {
       .send({ message: 'I would like to discuss a scouting opportunity.' });
     expect(connection.status).toBe(201);
 
-    expect((await request(app)
-      .put(`/api/athletes/${profile.body.data.id}/verification`)
-      .set('Authorization', `Bearer ${scoutToken}`)
-      .send({ status: 'verified' })).status).toBe(403);
     expect((await request(app)
       .get('/api/admin/hosts')
       .set('Authorization', `Bearer ${scoutToken}`)).status).toBe(403);
