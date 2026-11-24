@@ -273,7 +273,7 @@ function CertificateVerificationQueue() {
 }
 
 function PeTeacherDashboard({ user }: { user: User }) {
-  const [data, setData] = useState<{ athletes: Athlete[]; posts: AchievementPost[] }>({ athletes: [], posts: [] });
+  const [data, setData] = useState<{ athletes: Athlete[] }>({ athletes: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activeId, setActiveId] = useState('');
@@ -290,7 +290,7 @@ function PeTeacherDashboard({ user }: { user: User }) {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    api<{ athletes: Athlete[]; posts: AchievementPost[] }>('/pe-teacher/athletes', { signal: controller.signal, cache: 'no-store' })
+    api<{ athletes: Athlete[] }>('/pe-teacher/athletes', { signal: controller.signal, cache: 'no-store' })
       .then(setData)
       .catch((err) => {
         if (!controller.signal.aborted) {
@@ -401,35 +401,6 @@ function PeTeacherDashboard({ user }: { user: User }) {
         </section>
       )}
 
-      <section className="review-section">
-        <div className="dashboard-section-heading">
-          <div><span className="eyebrow">ACHIEVEMENTS FEED</span><h2>Local athlete activity.</h2></div>
-          <button className="button button-outline review-refresh" onClick={() => setRefresh(r => r + 1)} disabled={loading}>Refresh</button>
-        </div>
-
-        {loading ? <LoadingState label="Loading local activity…" /> : data.posts.length ? (
-          <div className="review-list">
-            {data.posts.map((post) => {
-              const athlete = post.athlete;
-              return (
-                <article className="review-row achievement-review-row" key={post.id}>
-                  <div className="review-profile">
-                    <strong>{post.title}</strong>
-                    <span>{athlete?.fullName || 'Athlete'} · {athlete?.sport}</span>
-                    <p className="post-desc-preview">{post.description}</p>
-                    {post.videoUrl ? (
-                      <video className="teacher-achievement-media" src={apiAsset(post.videoUrl)} controls preload="metadata" aria-label={`${post.title} video`} />
-                    ) : post.photoUrl ? (
-                      <img className="teacher-achievement-media" src={apiAsset(post.photoUrl)} alt={`${post.title} achievement`} />
-                    ) : null}
-                    <small>Posted {new Date(post.createdAt).toLocaleDateString()}</small>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        ) : <div className="dashboard-note">No recent activity from athletes in your district.</div>}
-      </section>
     </div>
   );
 }

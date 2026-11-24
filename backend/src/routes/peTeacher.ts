@@ -7,7 +7,6 @@ import { AchievementPost } from '../models/AchievementPost.js';
 import { sendSuccess, HttpError } from '../utils/http.js';
 import { validateBody } from '../middleware/validate.js';
 import { serializeProfile } from './athletes.js';
-import { serializePost, type PostAuthor } from './posts.js';
 
 const router = Router();
 
@@ -89,16 +88,8 @@ router.get('/athletes', requireAuth, requireVerifiedRole('pe_teacher'), async (r
     }
   }
 
-  // Also fetch recent posts for these athletes to show in dashboard
-  const athleteIds = athletes.map(a => a._id);
-  const posts = await AchievementPost.find({ athlete: { $in: athleteIds } })
-    .populate<{ athlete: PostAuthor | null }>('athlete', 'fullName sport district region verificationStatus')
-    .sort({ createdAt: -1 })
-    .limit(50);
-
   sendSuccess(res, {
     athletes: athletes.map(serializeProfile),
-    posts: posts.map(serializePost).filter((post) => post !== null),
   });
 });
 
