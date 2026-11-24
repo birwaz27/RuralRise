@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, ShieldCheck, Trash2, Trophy, UserRound, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trash2, Trophy, UserRound, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api, apiAsset, ApiError, type AchievementPost, type AchievementPostPage, type Athlete, type Connection, type User } from '../api';
@@ -6,6 +6,7 @@ import { useAuth } from '../auth';
 import AchievementEndorsement from '../components/AchievementEndorsement';
 import AthleteCard from '../components/AthleteCard';
 import { ErrorState, LoadingState, SkeletonDashboardStats } from '../components/States';
+import CertificatePreview from '../components/CertificatePreview';
 
 type DirectoryPage = { items: Athlete[]; pages: number };
 type ProfileForm = {
@@ -18,12 +19,12 @@ type ProfileForm = {
   background: string;
   tournaments: string;
 };
-const blankForm = (name = ''): ProfileForm => ({
+const blankForm = (name = '', district = ''): ProfileForm => ({
   fullName: name,
   age: '',
   sport: '',
-  district: '',
-  region: '',
+  district,
+  region: district,
   bio: '',
   background: '',
   tournaments: '',
@@ -92,7 +93,6 @@ function clearProfileDraft(userId: string): boolean {
 function HostDashboard({ user }: { user: User }) {
   const [shortlist, setShortlist] = useState<Athlete[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
-  const verified = user.isVerified === true;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -116,13 +116,11 @@ function HostDashboard({ user }: { user: User }) {
 
   return (
     <div className="container dashboard-page">
-      <div className="dashboard-welcome"><div><span className="eyebrow">YOUR SCOUT DESK</span><h1>Keep your eye<br />on what’s next.</h1></div><div className="dashboard-user"><CircleUserRound size={17} /> {user.username}{verified && <span className="verified-chip"><ShieldCheck size={13} /> VERIFIED SCOUT</span>}</div></div>
-      {!verified && <div className="scout-verification-notice" role="status"><ShieldCheck size={17} /><p><strong>Organization verification pending</strong><span>You can browse athletes, shortlist prospects, and contact verified athletes while we review your organization.</span></p></div>}
+      <div className="dashboard-welcome"><div><span className="eyebrow">YOUR SCOUT DESK</span><h1>Keep your eye<br />on what’s next.</h1></div><div className="dashboard-user"><CircleUserRound size={17} /> {user.username}<button className="button button-outline button-small" type="button" aria-label="Refresh scout dashboard" onClick={() => setRefresh((value) => value + 1)} disabled={loading}><RefreshCw size={14} /> Refresh</button></div></div>
       {loading ? <SkeletonDashboardStats /> : (
-        <div className="dashboard-stats"><div><span>ON YOUR RADAR</span><strong>{String(shortlist.length).padStart(2, '0')}</strong></div><div><span>INTRODUCTIONS SENT</span><strong>{String(connections.length).padStart(2, '0')}</strong></div><div><span>ACCOUNT STATUS</span><strong className="stat-status">{verified ? <><BadgeCheck size={20} /> Verified</> : 'Pending review'}</strong></div></div>
+        <div className="dashboard-stats scout-dashboard-stats"><div><span>ON YOUR RADAR</span><strong>{String(shortlist.length).padStart(2, '0')}</strong></div><div><span>INTRODUCTIONS SENT</span><strong>{String(connections.length).padStart(2, '0')}</strong></div></div>
       )}
-      {verified && <AthleteReviewQueue />}
-      <div className="dashboard-section-heading"><div><span className="eyebrow">THE ONES TO WATCH</span><h2>Your shortlist.</h2></div><Link className="text-link" to="/athletes">Find more talent <ArrowRight size={15} /></Link></div>
+      <div className="dashboard-section-heading"><div><span className="eyebrow">THE ONES TO WATCH</span><h2>Your shortlist.</h2></div><div className="dashboard-heading-actions"><Link className="button button-outline" to="/events">Scout events</Link><Link className="text-link" to="/athletes">Find more talent <ArrowRight size={15} /></Link></div></div>
       {loading ? <LoadingState label="Loading your scouting desk…" /> : error ? <ErrorState message={error} onRetry={() => setRefresh((value) => value + 1)} /> : shortlist.length ? <div className="athlete-grid">{shortlist.map((athlete, index) => <AthleteCard key={athlete.id} athlete={athlete} index={index} />)}</div> : <div className="dashboard-empty"><span className="empty-icon"><Heart size={20} /></span><div><h3>Your shortlist is a blank canvas.</h3><p>Save profiles that catch your eye to keep your scouting organized.</p></div><Link className="button button-primary" to="/athletes">Find your first prospect <ArrowRight size={15} /></Link></div>}
       <div className="dashboard-section-heading dashboard-lower-heading"><div><span className="eyebrow">OUTREACH, AT A GLANCE</span><h2>Introductions.</h2></div></div>
       {connections.length ? <div className="request-list">{connections.map((connection) => <div className="request-row" key={connection.id}><span className="request-avatar">{connection.athlete?.fullName?.slice(0, 1) || 'R'}</span><div><strong>{connection.athlete?.fullName || 'Athlete profile'}</strong><span>{connection.athlete?.sport || 'Talent'} · {connection.athlete?.district || 'Location unavailable'}</span></div><p>{connection.message}</p><span className={`request-status status-${connection.status}`}>{connection.status}</span></div>)}</div> : <div className="dashboard-note">No introductions yet. When you reach out to an athlete, you’ll find it here.</div>}
@@ -229,6 +227,51 @@ function AdminDashboard() {
   );
 }
 
+type PendingCertificate = {
+  id: string; title: string; description: string; eventDate: string | null; createdAt: string;
+  certificateUrl: string; verificationStatus: 'pending';
+  athlete: { id: string; fullName: string; sport: string; district: string; region: string } | null;
+};
+
+function CertificateVerificationQueue() {
+  const [items, setItems] = useState<PendingCertificate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
+  const [activeId, setActiveId] = useState('');
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [expanded, setExpanded] = useState('');
+  useEffect(() => {
+    const controller = new AbortController(); setLoading(true); setError('');
+    api<PendingCertificate[]>('/pe-teacher/pending-verifications', { signal: controller.signal, cache: 'no-store' })
+      .then(setItems).catch((requestError: unknown) => { if (!controller.signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Could not load certificate queue.'); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [refresh]);
+  async function review(item: PendingCertificate, status: 'verified' | 'rejected') {
+    setActiveId(item.id); setError(''); setNotice('');
+    try {
+      await api(`/pe-teacher/verify/${item.id}`, { method: 'PATCH', body: JSON.stringify({ status, notes: notes[item.id] ?? '' }) });
+      setItems((current) => current.filter((candidate) => candidate.id !== item.id));
+      setNotice(`${item.title} was ${status}.`);
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Could not review this certificate.'); }
+    finally { setActiveId(''); }
+  }
+  return <section className="review-section certificate-queue">
+    <div className="dashboard-section-heading"><div><span className="eyebrow">DOCUMENT REVIEW</span><h2>Certificate verification queue.</h2></div><div className="queue-heading-actions"><span className="filter-count">{items.length}</span><button className="button button-outline" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>Refresh</button></div></div>
+    <p className="review-intro">Inspect achievement certificates from athletes in your district. Your decision and notes are attached to the achievement.</p>
+    {error && <div className="form-error review-feedback" role="alert">{error}</div>}{notice && <div className="form-success review-feedback" role="status"><Check size={15} />{notice}</div>}
+    {loading ? <LoadingState label="Loading certificates awaiting review…" /> : items.length ? <div className="review-list">{items.map((item) => <article className="review-row certificate-review-row" key={item.id}>
+      <div className="review-profile"><strong>{item.title}</strong><span>{item.athlete?.fullName ?? 'Athlete'} · {item.athlete?.sport ?? ''} · {item.athlete?.district ?? ''}</span><p>{item.description}</p><small>Submitted {new Date(item.createdAt).toLocaleDateString()}</small>
+        <button className="button button-outline" type="button" onClick={() => setExpanded(expanded === item.id ? '' : item.id)}>{expanded === item.id ? 'Hide certificate' : 'Inspect certificate'}</button>
+        {expanded === item.id && <CertificatePreview url={item.certificateUrl} title={item.title} />}
+        <label className="field-label certificate-note">REVIEW NOTES<textarea rows={2} maxLength={500} value={notes[item.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Add context for the athlete or reviewer" /></label>
+      </div><div className="review-actions"><button className="button button-outline" disabled={activeId === item.id} onClick={() => review(item, 'rejected')}>Reject</button><button className="button button-primary" disabled={activeId === item.id} onClick={() => review(item, 'verified')}>{activeId === item.id ? 'Saving…' : 'Verify'}</button></div>
+    </article>)}</div> : <div className="dashboard-note">No certificates are waiting for verification.</div>}
+  </section>;
+}
+
 function PeTeacherDashboard({ user }: { user: User }) {
   const [data, setData] = useState<{ athletes: Athlete[]; posts: AchievementPost[] }>({ athletes: [], posts: [] });
   const [loading, setLoading] = useState(true);
@@ -247,7 +290,7 @@ function PeTeacherDashboard({ user }: { user: User }) {
     const controller = new AbortController();
     setLoading(true);
     setError('');
-    api<{ athletes: Athlete[]; posts: AchievementPost[] }>('/pe-teacher/athletes', { signal: controller.signal })
+    api<{ athletes: Athlete[]; posts: AchievementPost[] }>('/pe-teacher/athletes', { signal: controller.signal, cache: 'no-store' })
       .then(setData)
       .catch((err) => {
         if (!controller.signal.aborted) {
@@ -326,6 +369,8 @@ function PeTeacherDashboard({ user }: { user: User }) {
         <div><span>INSTITUTION</span><strong className="stat-status">{user.institutionName || 'N/A'}</strong></div>
       </div>
 
+      <CertificateVerificationQueue />
+
       {error && <div className="form-error review-feedback" role="alert">{error}</div>}
       {notice && <div className="form-success review-feedback" role="status"><Check size={15} />{notice}</div>}
 
@@ -345,7 +390,7 @@ function PeTeacherDashboard({ user }: { user: User }) {
                   <span>{profile.sport} · {profile.age} years · {profile.district}, {profile.region}</span>
                   <small>Created {new Date(profile.createdAt).toLocaleDateString()}</small>
                 </div>
-                <Link className="review-view-link" to={`/athletes/${profile.id}`} target="_blank" rel="noreferrer">Check details <ArrowRight size={14} /></Link>
+                <Link className="review-view-link" to={`/athletes/${profile.id}`}>Check details <ArrowRight size={14} /></Link>
                 <div className="review-actions">
                   <button className="button button-primary" disabled={activeId === profile.id} onClick={() => verifyAthlete(profile)}>
                     {activeId === profile.id ? 'Saving…' : 'Mark verified'}
@@ -370,7 +415,7 @@ function PeTeacherDashboard({ user }: { user: User }) {
                   <strong>{profile.fullName}</strong>
                   <span>{profile.sport} · {profile.age} years · {profile.district}, {profile.region}</span>
                 </div>
-                <Link className="review-view-link" to={`/athletes/${profile.id}`} target="_blank" rel="noreferrer">Check details <ArrowRight size={14} /></Link>
+                <Link className="review-view-link" to={`/athletes/${profile.id}`}>Check details <ArrowRight size={14} /></Link>
                 <div className="review-actions"><span className="verified-chip"><BadgeCheck size={13} /> VERIFIED</span></div>
               </article>
             ))}
@@ -427,6 +472,7 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
   const [description, setDescription] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [media, setMedia] = useState<File | null>(null);
+  const [certificate, setCertificate] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState('');
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(Boolean(profile));
@@ -438,6 +484,7 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
   const [editEventDate, setEditEventDate] = useState('');
   const [editMedia, setEditMedia] = useState<File | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  const [certificateBusyId, setCertificateBusyId] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -490,11 +537,17 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
         method: 'POST',
         body,
       });
-      setPosts((current) => [post, ...current].slice(0, 5));
+      if (certificate) {
+        const certificateBody = new FormData();
+        certificateBody.append('certificate', certificate);
+        await api(`/posts/${post.id}/certificate`, { method: 'POST', body: certificateBody });
+      }
+      setPosts((current) => [{ ...post, hasCertificate: Boolean(certificate), verificationStatus: certificate ? 'pending' : post.verificationStatus }, ...current].slice(0, 5));
       setTitle('');
       setDescription('');
       setEventDate('');
       setMedia(null);
+      setCertificate(null);
       if (mediaInputRef.current) mediaInputRef.current.value = '';
       setSuccess('Your achievement is now visible in the achievements feed.');
     } catch (requestError) {
@@ -517,6 +570,22 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
     } finally {
       setRemovingId('');
     }
+  }
+
+  async function uploadCertificate(post: AchievementPost, file: File | undefined) {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024 || !['application/pdf', 'image/png', 'image/jpeg'].includes(file.type)) {
+      setError('Choose a PDF, PNG, or JPG certificate no larger than 10 MB.');
+      return;
+    }
+    setCertificateBusyId(post.id); setError(''); setSuccess('');
+    try {
+      const body = new FormData(); body.append('certificate', file);
+      await api(`/posts/${post.id}/certificate`, { method: 'POST', body });
+      setPosts((current) => current.map((item) => item.id === post.id ? { ...item, hasCertificate: true, verificationStatus: 'pending', verificationNotes: null } : item));
+      setSuccess('Certificate uploaded and added to your PE Teacher’s review queue.');
+    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Could not upload this certificate.'); }
+    finally { setCertificateBusyId(''); }
   }
 
   function startEditingPost(post: AchievementPost) {
@@ -594,6 +663,8 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
               if (mediaError) setError(mediaError);
             }
           }} required /></label>
+          <label className="field-label achievement-photo-picker">CERTIFICATE DOCUMENT <span className="field-hint">Optional. PDF, PNG, or JPG up to 10 MB; a PE Teacher in your district will review it.</span><input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setCertificate(file && file.size <= 10 * 1024 * 1024 ? file : null); setError(file && file.size > 10 * 1024 * 1024 ? 'Certificate files must be 10 MB or smaller.' : ''); }} /></label>
+          {certificate && <span className="selected-file">{certificate.name} · awaiting PE Teacher review</span>}
           {mediaPreview && <div className="achievement-photo-preview">{media?.type.startsWith('video/') ? <video src={mediaPreview} controls muted playsInline /> : <img src={mediaPreview} alt="Achievement preview" />}<span><ImagePlus size={14} /> Ready to upload</span></div>}
           <div className="achievement-compose-footer">
             <label className="field-label">DATE <span className="field-hint">Optional</span><input type="date" className="tabular-nums" value={eventDate} onChange={(event) => setEventDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} /></label>
@@ -607,6 +678,8 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
               {post.videoUrl ? (
                 <video className="achievement-own-photo" src={apiAsset(post.videoUrl)} controls preload="metadata" aria-label={`${post.title} video`} />
               ) : post.photoUrl ? <img className="achievement-own-photo" src={apiAsset(post.photoUrl)} alt="" /> : null}
+              {post.hasCertificate && <div className="certificate-status-line"><ShieldCheck size={14} /> Certificate {post.verificationStatus ?? 'pending'}{post.verificationNotes ? ` · ${post.verificationNotes}` : ''}</div>}
+              <label className="certificate-upload-inline">{certificateBusyId === post.id ? 'Uploading certificate…' : post.hasCertificate ? 'Replace certificate' : 'Add certificate'}<input type="file" accept="application/pdf,image/png,image/jpeg" disabled={certificateBusyId === post.id} onChange={(event) => { void uploadCertificate(post, event.target.files?.[0]); event.target.value = ''; }} /></label>
               {editingPostId === post.id ? (
                 <form className="achievement-own-edit-form" onSubmit={(event) => savePost(event, post)}>
                   <label className="field-label">TITLE<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} minLength={3} maxLength={120} required /></label>
@@ -689,7 +762,7 @@ function CompactProfileCard({ profile, onEdit }: { profile: Athlete; onEdit: () 
 
 function TalentDashboard({ user }: { user: User }) {
   const [profile, setProfile] = useState<Athlete | null>(null);
-  const [form, setForm] = useState<ProfileForm>(() => getProfileDraft(user.id) ?? blankForm(user.username));
+  const [form, setForm] = useState<ProfileForm>(() => getProfileDraft(user.id) ?? blankForm(user.username, user.district));
   const [connections, setConnections] = useState<Connection[]>([]);
   const [photo, setPhoto] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
@@ -713,7 +786,7 @@ function TalentDashboard({ user }: { user: User }) {
         const ownProfile = profileResult.value;
         const draft = getProfileDraft(user.id);
         setProfile(ownProfile);
-        setForm(draft ?? (ownProfile ? profileForm(ownProfile) : blankForm(user.username)));
+        setForm(draft ?? (ownProfile ? profileForm(ownProfile) : blankForm(user.username, user.district)));
         setIsEditing(!ownProfile || Boolean(draft));
       } else {
         errors.push(profileResult.reason instanceof Error ? profileResult.reason.message : 'Could not load your profile.');
@@ -817,7 +890,6 @@ function TalentDashboard({ user }: { user: User }) {
                   <label className="field-label">REGION / STATE<input value={form.region} onChange={(event) => updateField('region', event.target.value)} maxLength={100} required /></label>
                 </div>
                 <label className="field-label">YOUR BIO<textarea rows={3} maxLength={2000} value={form.bio} onChange={(event) => updateField('bio', event.target.value)} placeholder="What should a scout know about you?" /></label>
-                <label className="field-label">YOUR SPORTING STORY<textarea rows={4} maxLength={3000} value={form.background} onChange={(event) => updateField('background', event.target.value)} placeholder="How did you get started? What are you working toward?" /></label>
                 <label className="field-label">TOURNAMENTS & ACHIEVEMENTS<span className="field-hint">Add one item per line.</span><textarea rows={3} value={form.tournaments} onChange={(event) => updateField('tournaments', event.target.value)} placeholder={'District athletics meet — 100m finalist\nState junior championship — 2025'} /></label>
                 <label className="field-label">PROFILE PHOTO<span className="field-hint">PNG or JPG, up to 2 MB.</span><input type="file" accept="image/png,image/jpeg" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} /></label>
                 {photo && <span className="selected-file">{photo.name} <button type="button" aria-label="Remove selected photo" onClick={() => setPhoto(null)}><X size={14} /></button></span>}
@@ -840,7 +912,14 @@ function TalentDashboard({ user }: { user: User }) {
   );
 }
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isInitializing } = useAuth();
+  if (isInitializing) {
+    return (
+      <div className="container dashboard-page">
+        <LoadingState label="Loading your dashboard…" />
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === 'host') return <HostDashboard user={user} />;
   if (user.role === 'admin') return <AdminDashboard />;
