@@ -96,13 +96,23 @@ type ApiEnvelope<T> = {
 
 const apiBase = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 const sessionKey = 'rural-rise-session';
-const localStorageUserKey = 'rural-rise-user-data';
+const tabSessionIdKey = 'rural-rise-tab-session-id';
+const tabSessionIdPattern = /^[a-f\d-]{36}$/i;
 let refreshInFlight: Promise<string | null> | null = null;
 export const sessionExpiredEvent = 'rural-rise-session-expired';
 export const sessionRestoredEvent = 'rural-rise-session-restored';
 
 function removeLegacySharedSession(): void {
   localStorage.removeItem(sessionKey);
+  localStorage.removeItem('rural-rise-user-data');
+}
+
+export function getTabSessionId(): string {
+  const existing = sessionStorage.getItem(tabSessionIdKey);
+  if (existing && tabSessionIdPattern.test(existing)) return existing;
+  const sessionId = crypto.randomUUID();
+  sessionStorage.setItem(tabSessionIdKey, sessionId);
+  return sessionId;
 }
 
 export class ApiError extends Error {
@@ -137,36 +147,9 @@ function isUser(value: unknown): value is User {
     && ['talent', 'host', 'admin', 'pe_teacher'].includes(candidate.role as string);
 }
 
-export function getLocalUser(): User | null {
-  try {
-    const saved = localStorage.getItem(localStorageUserKey);
-    if (!saved) return null;
-    const user = JSON.parse(saved) as unknown;
-    if (isUser(user)) return user;
-    localStorage.removeItem(localStorageUserKey);
-    return null;
-  } catch {
-    localStorage.removeItem(localStorageUserKey);
-    return null;
-  }
-}
-
-export function saveLocalUser(user: User): void {
-  try {
-    localStorage.setItem(localStorageUserKey, JSON.stringify(user));
-  } catch {
-    // ignore if localStorage is full or unavailable
-  }
-}
-
-export function clearLocalUser(): void {
-  localStorage.removeItem(localStorageUserKey);
-}
-
 export function saveSession(user: User, accessToken: string): void {
   removeLegacySharedSession();
   sessionStorage.setItem(sessionKey, JSON.stringify({ user, accessToken }));
-  saveLocalUser(user);
 }
 
 export function getSavedUser(): User | null {
@@ -174,14 +157,7 @@ export function getSavedUser(): User | null {
     removeLegacySharedSession();
     const saved = sessionStorage.getItem(sessionKey);
     const userFromSession: unknown = saved ? (JSON.parse(saved) as { user?: unknown }).user : null;
-    if (isUser(userFromSession)) return userFromSession;
-
-    const localUser = getLocalUser();
-    if (localUser) {
-      removeLegacySharedSession();
-      sessionStorage.setItem(sessionKey, JSON.stringify({ user: localUser, accessToken: getToken() }));
-    }
-    return localUser;
+    return isUser(userFromSession) ? userFromSession : null;
   } catch {
     sessionStorage.removeItem(sessionKey);
     return null;
@@ -191,11 +167,11 @@ export function getSavedUser(): User | null {
 export function clearSession(): void {
   removeLegacySharedSession();
   sessionStorage.removeItem(sessionKey);
-  clearLocalUser();
 }
 
 async function sendRequest(path: string, options: RequestInit, token: string | null): Promise<Response> {
   const headers = new Headers(options.headers);
+  headers.set('X-RuralRise-Session-Id', getTabSessionId());
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -213,7 +189,11 @@ export async function refreshAccessToken(): Promise<string | null> {
     refreshInFlight = (async () => {
       let response: Response;
       try {
-        response = await fetch(`${apiBase}/refresh`, { method: 'POST', credentials: 'include' });
+        response = await fetch(`${apiBase}/refresh`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'X-RuralRise-Session-Id': getTabSessionId() },
+        });
       } catch {
         throw new ApiError('Unable to reach the server. Please try again in a moment.');
       }
@@ -272,14 +252,6 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     );
   }
 
-  const responseData: unknown = body.data;
-  const candidateUser = responseData && typeof responseData === 'object' && 'user' in responseData
-    ? (responseData as { user: unknown }).user
-    : responseData;
-  const responseUser = Array.isArray(candidateUser) ? candidateUser[0] : candidateUser;
-  if (token && isUser(responseUser)) {
-    saveLocalUser(responseUser);
-  }
   return body.data;
 }
 

@@ -6,6 +6,11 @@ const userSchema = new Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true, select: false },
     refreshTokenHash: { type: String, select: false },
+    refreshSessions: {
+      type: [{ sessionId: { type: String, required: true }, tokenHash: { type: String, required: true } }],
+      default: [],
+      select: false,
+    },
     role: { type: String, enum: ['talent', 'host', 'admin', 'pe_teacher'], required: true },
     hostVerificationStatus: {
       type: String,

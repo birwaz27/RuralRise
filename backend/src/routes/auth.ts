@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -15,6 +15,7 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
 const refreshCookieName = 'rural-rise-refresh';
+const tabSessionHeader = 'x-ruralrise-session-id';
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
 const passwordSchema = z.string()
   .min(8)
@@ -54,8 +55,21 @@ function hashRefreshToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function setRefreshCookie(res: Response, token: string): void {
-  res.cookie(refreshCookieName, token, {
+function getTabSessionId(req: Request): string | null {
+  const sessionId = req.header(tabSessionHeader);
+  if (sessionId === undefined) return null;
+  if (!/^[a-f\d-]{36}$/i.test(sessionId)) {
+    throw new HttpError(400, 'INVALID_TAB_SESSION', 'The tab session identifier is invalid.');
+  }
+  return sessionId;
+}
+
+function getRefreshCookieName(sessionId: string | null): string {
+  return sessionId ? `${refreshCookieName}-${sessionId}` : refreshCookieName;
+}
+
+function setRefreshCookie(res: Response, token: string, sessionId: string | null): void {
+  res.cookie(getRefreshCookieName(sessionId), token, {
     httpOnly: true,
     secure: env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -63,8 +77,8 @@ function setRefreshCookie(res: Response, token: string): void {
   });
 }
 
-function clearRefreshCookie(res: Response): void {
-  res.clearCookie(refreshCookieName, {
+function clearRefreshCookie(res: Response, sessionId: string | null): void {
+  res.clearCookie(getRefreshCookieName(sessionId), {
     httpOnly: true,
     secure: env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -75,11 +89,18 @@ function clearRefreshCookie(res: Response): void {
 async function establishSession(
   user: { id: string; role: string; refreshTokenHash?: string | null; save: () => Promise<unknown> },
   res: Response,
+  sessionId: string | null,
 ) {
   const refreshToken = makeRefreshToken(user.id);
-  user.refreshTokenHash = hashRefreshToken(refreshToken);
-  await user.save();
-  setRefreshCookie(res, refreshToken);
+  if (sessionId) {
+    const tokenHash = hashRefreshToken(refreshToken);
+    await User.updateOne({ _id: user.id }, { $pull: { refreshSessions: { sessionId } } });
+    await User.updateOne({ _id: user.id }, { $push: { refreshSessions: { sessionId, tokenHash } } });
+  } else {
+    user.refreshTokenHash = hashRefreshToken(refreshToken);
+    await user.save();
+  }
+  setRefreshCookie(res, refreshToken, sessionId);
   return makeAccessToken(user);
 }
 
@@ -178,7 +199,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
     });
   }
 
-  const accessToken = await establishSession(user, res);
+  const accessToken = await establishSession(user, res, getTabSessionId(req));
   sendSuccess(res, { user: fullUser(user), accessToken }, 201);
 });
 
@@ -189,7 +210,7 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
   if (!user || !passwordMatches) {
     throw new HttpError(401, 'INVALID_CREDENTIALS', 'Email or password is incorrect.');
   }
-  const accessToken = await establishSession(user, res);
+  const accessToken = await establishSession(user, res, getTabSessionId(req));
   sendSuccess(res, { user: fullUser(user), accessToken });
 });
 
@@ -200,8 +221,11 @@ router.get('/me', requireAuth, async (req: AuthenticatedRequest, res) => {
 });
 
 router.post('/refresh', authLimiter, async (req, res) => {
-  const refreshToken = req.cookies?.[refreshCookieName];
+  const sessionId = getTabSessionId(req);
+  const tabCookieName = getRefreshCookieName(sessionId);
+  const refreshToken = req.cookies?.[tabCookieName];
   if (typeof refreshToken !== 'string') {
+    clearRefreshCookie(res, sessionId);
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
   }
 
@@ -213,13 +237,17 @@ router.post('/refresh', authLimiter, async (req, res) => {
     }
     payload = decoded;
   } catch {
-    clearRefreshCookie(res);
+    clearRefreshCookie(res, sessionId);
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
   }
 
-  const user = await User.findById(payload.sub).select('+refreshTokenHash');
-  if (!user || !user.refreshTokenHash || hashRefreshToken(refreshToken) !== user.refreshTokenHash) {
-    clearRefreshCookie(res);
+  const user = await User.findById(payload.sub).select(sessionId ? '+refreshSessions' : '+refreshTokenHash');
+  const tokenHash = hashRefreshToken(refreshToken);
+  const sessionMatches = sessionId
+    ? user?.refreshSessions?.some((session: { sessionId: string; tokenHash: string }) => session.sessionId === sessionId && session.tokenHash === tokenHash)
+    : user?.refreshTokenHash === tokenHash;
+  if (!user || !sessionMatches) {
+    clearRefreshCookie(res, sessionId);
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
   }
 
@@ -227,14 +255,21 @@ router.post('/refresh', authLimiter, async (req, res) => {
 });
 
 router.post('/logout', async (req, res) => {
-  const refreshToken = req.cookies?.[refreshCookieName];
-  if (typeof refreshToken === 'string') {
+  const sessionId = getTabSessionId(req);
+  const refreshToken = req.cookies?.[getRefreshCookieName(sessionId)];
+  if (typeof refreshToken === 'string' && sessionId) {
+    const tokenHash = hashRefreshToken(refreshToken);
+    await User.updateOne(
+      { 'refreshSessions.sessionId': sessionId, 'refreshSessions.tokenHash': tokenHash },
+      { $pull: { refreshSessions: { sessionId, tokenHash } } },
+    );
+  } else if (typeof refreshToken === 'string') {
     await User.updateOne(
       { refreshTokenHash: hashRefreshToken(refreshToken) },
       { $unset: { refreshTokenHash: 1 } },
     );
   }
-  clearRefreshCookie(res);
+  clearRefreshCookie(res, sessionId);
   sendSuccess(res, { loggedOut: true });
 });
 

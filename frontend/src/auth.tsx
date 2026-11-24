@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from 'react';
-import { ApiError, api, clearSession, getSavedUser, getToken, refreshAccessToken, saveLocalUser, saveSession, sessionExpiredEvent, sessionRestoredEvent, type User } from './api';
+import { ApiError, api, clearSession, getSavedUser, getToken, refreshAccessToken, saveSession, sessionExpiredEvent, sessionRestoredEvent, type User } from './api';
 
 type Credentials = { email: string; password: string };
 type Registration = Credentials & { username: string; role: 'talent' | 'host' | 'pe_teacher'; institutionName?: string; district?: string };
@@ -34,7 +34,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ? response.user
         : (response as User);
       setUser(userData);
-      saveLocalUser(userData);
       const token = getToken();
       if (token) saveSession(userData, token);
       return userData;
