@@ -24,8 +24,9 @@ function AchievementCards({ achievements }: { achievements: AchievementPost[] })
             <Link to={`/athletes/${achievement.athlete.id}`} className="home-achievement-athlete">
               {achievement.athlete.fullName} <span>· {achievement.athlete.sport}</span>
             </Link>
-            <h3>{achievement.title}</h3>
+            <h3><Link to={`/achievements/${achievement.id}`}>{achievement.title}</Link></h3>
             <p>{achievement.description}</p>
+            <Link className="home-achievement-detail-link" to={`/achievements/${achievement.id}`}>Read full achievement <ArrowRight size={13} /></Link>
             <AchievementEndorsement status={achievement.endorsementStatus} />
             <span className="home-achievement-date"><CalendarDays size={13} /> {achievement.eventDate ? new Date(`${achievement.eventDate.slice(0, 10)}T12:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : 'Recently shared'}</span>
           </div>
@@ -43,6 +44,13 @@ export default function Home() {
   const [achievementRefresh, setAchievementRefresh] = useState(0);
 
   useEffect(() => {
+    if (!user) {
+      setAchievements([]);
+      setAchievementError('');
+      setAchievementsLoading(false);
+      return;
+    }
+
     const controller = new AbortController();
     setAchievementError('');
     setAchievementsLoading(true);
@@ -55,7 +63,7 @@ export default function Home() {
       })
       .finally(() => { if (!controller.signal.aborted) setAchievementsLoading(false); });
     return () => controller.abort();
-  }, [achievementRefresh]);
+  }, [achievementRefresh, user]);
 
   if (user) {
     return (
@@ -161,29 +169,6 @@ export default function Home() {
             <p>Sign in or create an account to browse athlete profiles and achievements.</p>
             <Link className="button button-lime" to="/login">Log in to explore <ArrowRight size={15} /></Link>
           </div>
-        </div>
-      </section>
-
-      <section className="home-achievements-section" id="achievements">
-        <div className="container">
-          <div className="home-achievements-heading">
-            <div><span className="eyebrow">FROM THE FIELD</span><h2>Achievements worth seeing.</h2></div>
-          </div>
-          {achievementsLoading ? (
-            <div className="home-achievements-message" role="status">Loading achievements…</div>
-          ) : achievementError ? (
-            <div className="home-achievements-message" role="status">
-              <span>{achievementError}</span>
-              <button className="text-link" onClick={() => setAchievementRefresh((value) => value + 1)}>Try again <ArrowRight size={14} /></button>
-            </div>
-          ) : achievements.length ? (
-            <AchievementCards achievements={achievements} />
-          ) : (
-            <div className="home-achievements-message" role="status">
-              <span>Player achievements will appear here as athletes share their progress.</span>
-              {!user && <Link className="text-link" to="/register">Be the first to share yours <ArrowRight size={14} /></Link>}
-            </div>
-          )}
         </div>
       </section>
 
