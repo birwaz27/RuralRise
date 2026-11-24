@@ -13,6 +13,7 @@ import athletesRouter from './routes/athletes.js';
 import connectionsRouter from './routes/connections.js';
 import postsRouter from './routes/posts.js';
 import peTeacherRouter from './routes/peTeacher.js';
+import eventsRouter from './routes/events.js';
 import { sendSuccess } from './utils/http.js';
 
 if (env.SENTRY_DSN) Sentry.init({ dsn: env.SENTRY_DSN, environment: env.NODE_ENV });
@@ -42,6 +43,7 @@ export function createApp() {
   app.use('/api/connections', connectionsRouter);
   app.use('/api/posts', postsRouter);
   app.use('/api/pe-teacher', peTeacherRouter);
+  app.use('/api/events', eventsRouter);
   app.use((_req, res) => {
     res.status(404).json({
       success: false,
