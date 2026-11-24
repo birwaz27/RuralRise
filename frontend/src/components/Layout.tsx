@@ -14,6 +14,7 @@ function Header() {
   const navigate = useNavigate();
   const [signOutError, setSignOutError] = useState('');
   const [sessionExpired, setSessionExpired] = useState(false);
+  const roleLabel = user?.role === 'talent' ? 'Player' : user?.role === 'host' ? 'Scout' : user?.role === 'pe_teacher' ? 'PE Teacher' : user?.role === 'admin' ? 'Admin' : '';
 
   useEffect(() => {
     const handleExpired = () => setSessionExpired(true);
@@ -82,8 +83,8 @@ function Header() {
           </button>
           <nav className={`main-nav${menuOpen ? ' is-open' : ''}`} aria-label="Main navigation">
             <NavLink to="/" end onClick={closeMenu}>Home</NavLink>
-            {user && <NavLink to="/athletes" onClick={closeMenu}>Talent pool</NavLink>}
-            {user && <NavLink to="/events" onClick={closeMenu}>Events</NavLink>}
+            <NavLink to="/athletes" onClick={closeMenu}>Talent pool</NavLink>
+            <NavLink to="/events" onClick={closeMenu}>Events</NavLink>
             {!user && <Link to="/#about" onClick={handleAboutClick}>About</Link>}
             <div className="nav-contact" ref={contactRef}>
               <button
@@ -105,6 +106,7 @@ function Header() {
             <span className="nav-mobile-divider" />
             {user ? (
               <>
+                <span className="role-pill">{roleLabel}</span>
                 <Link className="nav-account-link" to="/dashboard" onClick={closeMenu}>Dashboard</Link>
                 {signOutError && <span className="nav-signout-error" role="status">{signOutError}</span>}
                 <button className="button button-small button-outline nav-join" onClick={handleSignOut}>Sign out</button>
@@ -112,7 +114,7 @@ function Header() {
             ) : (
               <>
                 <Link className="nav-login" to="/login" onClick={closeMenu}>Log in</Link>
-                <Link className="button button-small button-primary nav-join" to="/register" onClick={closeMenu}>Join the community</Link>
+                <Link className="button button-small button-primary nav-join" to="/register" onClick={closeMenu}>Get started</Link>
               </>
             )}
           </nav>
