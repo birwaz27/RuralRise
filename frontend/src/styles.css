@@ -1067,3 +1067,11 @@ body:has(.home-page) .site-footer .brand-light .brand-name > span { color: #52B7
 .combined-upload-step .achievement-upload-step-heading b { font-size: 13px; }
 .combined-upload-step .achievement-upload-step-heading small { font-size: 10px; }
 .combined-file-picker { min-height: 56px; }
+.achievement-layout { grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: 20px; }
+.achievement-own-list { min-width: 0; }
+.achievement-own-post { display: grid; grid-template-columns: 88px minmax(0, 1fr); align-items: center; justify-content: start; gap: 14px; min-width: 0; }
+.achievement-own-photo { width: 88px; height: 72px; }
+.achievement-own-post-info { display: grid; gap: 7px; min-width: 0; }
+.achievement-own-post-info strong { overflow-wrap: anywhere; font-size: 13px; }
+.achievement-own-post-info span { color: var(--muted); font-family: var(--mono, monospace); font-size: 10px; }
+@media (max-width: 900px) { .achievement-layout { grid-template-columns: 1fr; } }

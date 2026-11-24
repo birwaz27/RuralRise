@@ -1,9 +1,8 @@
-import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trash2, Trophy, UserRound, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trophy, UserRound, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api, apiAsset, ApiError, type AchievementPost, type AchievementPostPage, type Athlete, type Connection, type User } from '../api';
 import { useAuth } from '../auth';
-import AchievementEndorsement from '../components/AchievementEndorsement';
 import AthleteCard from '../components/AthleteCard';
 import { ErrorState, LoadingState, SkeletonDashboardStats } from '../components/States';
 
@@ -383,14 +382,6 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(Boolean(profile));
   const [saving, setSaving] = useState(false);
-  const [removingId, setRemovingId] = useState('');
-  const [editingPostId, setEditingPostId] = useState('');
-  const [editTitle, setEditTitle] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editEventDate, setEditEventDate] = useState('');
-  const [editMedia, setEditMedia] = useState<File | null>(null);
-  const [editSaving, setEditSaving] = useState(false);
-  const [certificateBusyId, setCertificateBusyId] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -463,79 +454,6 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
     }
   }
 
-  async function removePost(post: AchievementPost) {
-    setRemovingId(post.id);
-    setError('');
-    setSuccess('');
-    try {
-      await api(`/posts/${post.id}`, { method: 'DELETE' });
-      setPosts((current) => current.filter((item) => item.id !== post.id));
-      setSuccess('Achievement removed.');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Could not remove this achievement.');
-    } finally {
-      setRemovingId('');
-    }
-  }
-
-  async function uploadCertificate(post: AchievementPost, file: File | undefined) {
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024 || !['application/pdf', 'image/png', 'image/jpeg'].includes(file.type)) {
-      setError('Choose a PDF, PNG, or JPG certificate no larger than 10 MB.');
-      return;
-    }
-    setCertificateBusyId(post.id); setError(''); setSuccess('');
-    try {
-      const body = new FormData(); body.append('certificate', file);
-      await api(`/posts/${post.id}/certificate`, { method: 'POST', body });
-      setPosts((current) => current.map((item) => item.id === post.id ? { ...item, hasCertificate: true, verificationStatus: 'pending', verificationNotes: null } : item));
-      setSuccess('Certificate uploaded and added to your PE Teacher’s review queue.');
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Could not upload this certificate.'); }
-    finally { setCertificateBusyId(''); }
-  }
-
-  function startEditingPost(post: AchievementPost) {
-    setEditingPostId(post.id);
-    setEditTitle(post.title);
-    setEditDescription(post.description);
-    setEditEventDate(post.eventDate?.slice(0, 10) ?? '');
-    setEditMedia(null);
-    setError('');
-    setSuccess('');
-  }
-
-  function cancelEditingPost() {
-    setEditingPostId('');
-    setEditMedia(null);
-    setError('');
-  }
-
-  async function savePost(event: React.FormEvent<HTMLFormElement>, post: AchievementPost) {
-    event.preventDefault();
-    setEditSaving(true);
-    setError('');
-    setSuccess('');
-    try {
-      const body = new FormData();
-      body.append('title', editTitle);
-      body.append('description', editDescription);
-      body.append('eventDate', editEventDate);
-      if (editMedia) body.append('photo', editMedia);
-      const updatedPost = await api<AchievementPost>(`/posts/${post.id}`, {
-        method: 'PATCH',
-        body,
-      });
-      setPosts((current) => current.map((item) => item.id === updatedPost.id ? updatedPost : item));
-      setEditingPostId('');
-      setEditMedia(null);
-      setSuccess('Achievement updated.');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Could not update this achievement.');
-    } finally {
-      setEditSaving(false);
-    }
-  }
-
   if (!profile) {
     return (
       <section className="achievement-section">
@@ -584,7 +502,8 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
             }} required /><span className="achievement-file-picker-button">Choose files</span><span className="achievement-file-picker-name">{[media?.name, certificate?.name].filter(Boolean).join(' · ') || 'No achievement or certificate selected'}</span></label>
             <span className="field-hint">Required: achievement photo/video (PNG/JPG up to 2 MB, MP4/WebM up to 25 MB). Optional: certificate (PDF/image up to 10 MB). Select both files together if attaching a certificate.</span>
             {(media || certificate) && <button className="achievement-file-clear" type="button" onClick={() => { setMedia(null); setCertificate(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}>Remove selected files</button>}
-          </section>          {mediaPreview && <div className="achievement-photo-preview">{media?.type.startsWith('video/') ? <video src={mediaPreview} controls muted playsInline /> : <img src={mediaPreview} alt="Achievement preview" />}<span><ImagePlus size={14} /> Ready to upload</span></div>}
+          </section>
+          {mediaPreview && <div className="achievement-photo-preview">{media?.type.startsWith('video/') ? <video src={mediaPreview} controls muted playsInline /> : <img src={mediaPreview} alt="Achievement preview" />}<span><ImagePlus size={14} /> Ready to upload</span></div>}
           <div className="achievement-compose-footer">
             <label className="field-label">DATE <span className="field-hint">Optional</span><input type="date" className="tabular-nums" value={eventDate} onChange={(event) => setEventDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} /></label>
             <button type="submit" className="button button-primary" disabled={saving}>{saving ? 'Sharing…' : 'Share achievement'} <ArrowRight size={15} /></button>
@@ -594,51 +513,11 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
           <div className="achievement-own-heading"><span>YOUR POSTS</span><span>{String(posts.length).padStart(2, '0')}</span></div>
           {loading ? <LoadingState label="Loading your posts…" /> : posts.length ? posts.map((post) => (
             <article className="achievement-own-post" key={post.id}>
-              {post.videoUrl ? (
-                <video className="achievement-own-photo" src={apiAsset(post.videoUrl)} controls preload="metadata" aria-label={`${post.title} video`} />
-              ) : post.photoUrl ? <img className="achievement-own-photo" src={apiAsset(post.photoUrl)} alt="" /> : null}
-              {post.hasCertificate && <div className="certificate-status-line"><ShieldCheck size={14} /> Certificate {post.verificationStatus ?? 'pending'}{post.verificationNotes ? ` · ${post.verificationNotes}` : ''}</div>}
-              <label className="certificate-upload-inline">{certificateBusyId === post.id ? 'Uploading certificate…' : post.hasCertificate ? 'Replace certificate' : 'Add certificate'}<input type="file" accept="application/pdf,image/png,image/jpeg" disabled={certificateBusyId === post.id} onChange={(event) => { void uploadCertificate(post, event.target.files?.[0]); event.target.value = ''; }} /></label>
-              {editingPostId === post.id ? (
-                <form className="achievement-own-edit-form" onSubmit={(event) => savePost(event, post)}>
-                  <label className="field-label">TITLE<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} minLength={3} maxLength={120} required /></label>
-                  <label className="field-label">YOUR STORY<textarea rows={3} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} maxLength={1500} required /></label>
-                  <label className="field-label">DATE <span className="field-hint">Optional</span><input type="date" className="tabular-nums" value={editEventDate} onChange={(event) => setEditEventDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} /></label>
-                  <label className="field-label achievement-photo-picker">REPLACE MEDIA <span className="field-hint">Optional; leave empty to keep the current media.</span><input type="file" accept="image/png,image/jpeg,video/mp4,video/webm" onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    setError('');
-                    if (!file) {
-                      setEditMedia(null);
-                      return;
-                    }
-                    const mediaError = achievementMediaError(file);
-                    if (mediaError) {
-                      setEditMedia(null);
-                      setError(mediaError);
-                    } else {
-                      setEditMedia(file);
-                    }
-                  }} /></label>
-                  <div className="achievement-own-edit-actions">
-                    <button type="button" className="button button-outline" onClick={cancelEditingPost} disabled={editSaving}>Cancel</button>
-                    <button type="submit" className="button button-primary" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save changes'} <Check size={14} /></button>
-                  </div>
-                </form>
-              ) : (
-                <>
-                  <div>
-                    <strong>{post.title}</strong>
-                    <p>{post.description}</p>
-                    <AchievementEndorsement status={post.endorsementStatus} />
-                    {post.endorsementStatus === 'correction_requested' && post.endorsementNote && <p className="achievement-correction-note">{post.endorsementNote}</p>}
-                    <span>{post.eventDate ? `Event ${new Date(`${post.eventDate.slice(0, 10)}T12:00:00`).toLocaleDateString()}` : `Shared ${new Date(post.createdAt).toLocaleDateString()}`}</span>
-                  </div>
-                  <div className="achievement-own-actions">
-                    <button type="button" className="achievement-edit" aria-label={`Edit ${post.title}`} disabled={removingId === post.id} onClick={() => startEditingPost(post)}><Pencil size={14} /></button>
-                    <button type="button" className="achievement-delete" aria-label={`Delete ${post.title}`} disabled={removingId === post.id} onClick={() => removePost(post)}><Trash2 size={15} /></button>
-                  </div>
-                </>
-              )}
+              {post.videoUrl ? <video className="achievement-own-photo" src={apiAsset(post.videoUrl)} muted playsInline preload="metadata" aria-label={post.title} /> : post.photoUrl ? <img className="achievement-own-photo" src={apiAsset(post.photoUrl)} alt={post.title} /> : null}
+              <div className="achievement-own-post-info">
+                <strong>{post.title}</strong>
+                <span>{post.eventDate ? new Date(`${post.eventDate.slice(0, 10)}T12:00:00`).toLocaleDateString() : new Date(post.createdAt).toLocaleDateString()}</span>
+              </div>
             </article>
           )) : <p className="achievement-own-empty">Your achievements will appear here after you share your first post.</p>}
         </div>
