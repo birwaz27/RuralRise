@@ -1,5 +1,5 @@
 import { Menu, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth';
 import { sessionExpiredEvent, sessionRestoredEvent } from '../api';
@@ -126,22 +126,19 @@ function Header() {
 function ScrollToHash() {
   const { pathname, hash } = useLocation();
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!hash) {
-      const timeout = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 0);
-      return () => window.clearTimeout(timeout);
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      return;
     }
     const targetId = decodeURIComponent(hash.slice(1));
-    const timeout = window.setTimeout(() => {
-      const target = document.getElementById(targetId);
-      if (!target) return;
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      target.scrollIntoView({
-        behavior: prefersReducedMotion ? 'auto' : 'smooth',
-        block: 'start',
-      });
-    }, 0);
-    return () => window.clearTimeout(timeout);
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    target.scrollIntoView({
+      behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      block: 'start',
+    });
   }, [pathname, hash]);
 
   return null;
