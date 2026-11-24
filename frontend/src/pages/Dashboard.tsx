@@ -414,6 +414,7 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
   const [certificate, setCertificate] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState('');
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const certificateInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(Boolean(profile));
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState('');
@@ -488,6 +489,7 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
       setMedia(null);
       setCertificate(null);
       if (mediaInputRef.current) mediaInputRef.current.value = '';
+      if (certificateInputRef.current) certificateInputRef.current.value = '';
       setSuccess('Your achievement is now visible in the achievements feed.');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Could not share your achievement.');
@@ -584,26 +586,38 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
         <div><span className="eyebrow">YOUR ACHIEVEMENTS</span><h2>Put the work on record.</h2></div>
         <Link className="text-link" to="/#achievements">See latest on Home <ArrowRight size={15} /></Link>
       </div>
-      <p className="dashboard-intro">All athlete accounts can share achievements, even while their profile is awaiting verification. Add a personal best, tournament result, or proud moment with an image or video.</p>
+      <p className="dashboard-intro">Add the achievement details, upload a photo or video as proof, then attach its certificate if you have one. The certificate is sent to a PE Teacher in your district for review.</p>
       {error && <div className="form-error" role="alert">{error}</div>}
       {success && <div className="form-success" role="status"><Check size={15} />{success}</div>}
       <div className="achievement-layout">
         <form className="achievement-compose-form" onSubmit={publish}>
           <label className="field-label">TITLE<input value={title} onChange={(event) => setTitle(event.target.value)} minLength={3} maxLength={120} placeholder="e.g. District Athletics Championship" required /></label>
           <label className="field-label">YOUR STORY<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1500} placeholder="Share your result or a detail scouts should know." required /></label>
-          <label className="field-label achievement-photo-picker">IMAGE OR VIDEO<span className="field-hint">PNG/JPG up to 2 MB, or MP4/WebM up to 25 MB.</span><input ref={mediaInputRef} type="file" accept="image/png,image/jpeg,video/mp4,video/webm" onChange={(event) => {
-            const file = event.target.files?.[0];
-            setError('');
-            if (!file) {
-              setMedia(null);
-            } else {
-              const mediaError = achievementMediaError(file);
-              setMedia(mediaError ? null : file);
-              if (mediaError) setError(mediaError);
-            }
-          }} required /></label>
-          <label className="field-label achievement-photo-picker">CERTIFICATE DOCUMENT <span className="field-hint">Optional. PDF, PNG, or JPG up to 10 MB; a PE Teacher in your district will review it.</span><input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(event) => { const file = event.target.files?.[0] ?? null; setCertificate(file && file.size <= 10 * 1024 * 1024 ? file : null); setError(file && file.size > 10 * 1024 * 1024 ? 'Certificate files must be 10 MB or smaller.' : ''); }} /></label>
-          {certificate && <span className="selected-file">{certificate.name} · awaiting PE Teacher review</span>}
+          <section className="achievement-upload-step" aria-labelledby="achievement-media-heading">
+            <div className="achievement-upload-step-heading"><span>01</span><div><b id="achievement-media-heading">Achievement photo or video</b><small>Required · show your result or performance</small></div></div>
+            <label className="achievement-file-picker"><input ref={mediaInputRef} type="file" accept="image/png,image/jpeg,video/mp4,video/webm" aria-label="Upload achievement photo or video" onChange={(event) => {
+              const file = event.target.files?.[0];
+              setError('');
+              if (!file) {
+                setMedia(null);
+              } else {
+                const mediaError = achievementMediaError(file);
+                setMedia(mediaError ? null : file);
+                if (mediaError) {
+                  setError(mediaError);
+                  if (mediaInputRef.current) mediaInputRef.current.value = '';
+                }
+              }
+            }} required /><span className="achievement-file-picker-button">Choose photo or video</span><span className="achievement-file-picker-name">{media?.name ?? 'No achievement file selected'}</span></label>
+            {media && <button className="achievement-file-clear" type="button" onClick={() => { setMedia(null); if (mediaInputRef.current) mediaInputRef.current.value = ''; }}>Remove achievement file</button>}
+            <span className="field-hint">PNG/JPG up to 2 MB · MP4/WebM up to 25 MB</span>
+          </section>
+          <section className="achievement-upload-step certificate-upload-step" aria-labelledby="achievement-certificate-heading">
+            <div className="achievement-upload-step-heading"><span>02</span><div><b id="achievement-certificate-heading">Achievement certificate</b><small>Optional · official proof for PE Teacher verification</small></div></div>
+            <label className="achievement-file-picker"><input ref={certificateInputRef} type="file" accept="application/pdf,image/png,image/jpeg" aria-label="Upload achievement certificate" onChange={(event) => { const file = event.target.files?.[0] ?? null; const tooLarge = Boolean(file && file.size > 10 * 1024 * 1024); setCertificate(file && !tooLarge ? file : null); setError(tooLarge ? 'Certificate files must be 10 MB or smaller.' : ''); if (tooLarge && certificateInputRef.current) certificateInputRef.current.value = ''; }} /><span className="achievement-file-picker-button">Choose certificate</span><span className="achievement-file-picker-name">{certificate?.name ?? 'No certificate selected'}</span></label>
+            {certificate && <button className="achievement-file-clear" type="button" onClick={() => { setCertificate(null); if (certificateInputRef.current) certificateInputRef.current.value = ''; }}>Remove certificate</button>}
+            <span className="field-hint">PDF/PNG/JPG up to 10 MB · attached to this achievement and sent for review</span>
+          </section>
           {mediaPreview && <div className="achievement-photo-preview">{media?.type.startsWith('video/') ? <video src={mediaPreview} controls muted playsInline /> : <img src={mediaPreview} alt="Achievement preview" />}<span><ImagePlus size={14} /> Ready to upload</span></div>}
           <div className="achievement-compose-footer">
             <label className="field-label">DATE <span className="field-hint">Optional</span><input type="date" className="tabular-nums" value={eventDate} onChange={(event) => setEventDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} /></label>
