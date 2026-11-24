@@ -53,39 +53,23 @@ router.patch('/verify/:achievementId', requireAuth, requireVerifiedRole('pe_teac
 });
 
 router.get('/athletes', requireAuth, requireVerifiedRole('pe_teacher'), async (req: AuthenticatedRequest, res) => {
-  const teacher = await User.findById(req.authUser!.id).select('district');
-  if (!teacher) throw new HttpError(404, 'TEACHER_NOT_FOUND', 'The PE Teacher account was not found.');
+  const athletes = await AthleteProfile.find().sort({ createdAt: -1 });
 
-  const teacherDistrict = teacher.district?.trim();
-  const districtQuery = teacherDistrict
-    ? { district: { $regex: new RegExp(`^${teacherDistrict.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } }
-    : null;
-
-  const athletes = districtQuery
-    ? await AthleteProfile.find(districtQuery).sort({ createdAt: -1 })
-    : [];
-
-  // Also catch any registered talent users in this district who don't have an AthleteProfile yet
-  if (districtQuery && teacherDistrict) {
-    const existingUserIds = athletes.map((a) => a.user.toString());
-    const usersWithoutProfile = await User.find({
-      role: 'talent',
-      district: districtQuery.district,
-      _id: { $nin: existingUserIds },
+  // Include legacy talent accounts that predate automatic profile creation.
+  const existingUserIds = athletes.map((athlete) => athlete.user.toString());
+  const usersWithoutProfile = await User.find({ role: 'talent', _id: { $nin: existingUserIds } });
+  for (const user of usersWithoutProfile) {
+    const district = user.district?.trim() || 'Unspecified';
+    const created = await AthleteProfile.create({
+      user: user._id,
+      fullName: user.username,
+      age: 18,
+      sport: 'Athletics',
+      district,
+      region: district,
+      verificationStatus: 'pending',
     });
-
-    for (const u of usersWithoutProfile) {
-      const created = await AthleteProfile.create({
-        user: u._id,
-        fullName: u.username,
-        age: 18,
-        sport: 'Athletics',
-        district: u.district || teacherDistrict,
-        region: u.district || teacherDistrict,
-        verificationStatus: 'pending',
-      });
-      athletes.unshift(created);
-    }
+    athletes.unshift(created);
   }
 
   sendSuccess(res, {
@@ -99,22 +83,14 @@ router.put('/athletes/:id/verification', requireAuth, requireVerifiedRole('pe_te
     throw new HttpError(400, 'INVALID_ID', 'The supplied athlete ID is invalid.');
   }
 
-  const teacher = await User.findById(req.authUser!.id).select('district');
-  if (!teacher?.district) {
-    throw new HttpError(403, 'DISTRICT_REQUIRED', 'Your PE Teacher account must have a district to verify local athletes.');
-  }
-
   const profile = await AthleteProfile.findById(id);
   if (!profile) throw new HttpError(404, 'ATHLETE_NOT_FOUND', 'Athlete profile was not found.');
-  if (profile.district.trim().toLowerCase() !== teacher.district.trim().toLowerCase()) {
-    throw new HttpError(403, 'OUT_OF_DISTRICT', 'You can only verify athlete profiles in your district.');
-  }
   if (profile.verificationStatus !== 'pending') {
     throw new HttpError(409, 'PROFILE_ALREADY_REVIEWED', 'This athlete profile is no longer awaiting verification.');
   }
 
   profile.verificationStatus = 'verified';
-  profile.verifiedBy = teacher._id;
+  profile.verifiedBy = req.authUser!.id as any;
   await profile.save();
   sendSuccess(res, { id: profile.id, verificationStatus: profile.verificationStatus });
 });

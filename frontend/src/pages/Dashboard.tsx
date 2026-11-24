@@ -324,7 +324,7 @@ function PeTeacherDashboard({ user }: { user: User }) {
           <div><span className="eyebrow">ATHLETE ACCOUNTS</span><h2>Profiles awaiting review.</h2></div>
           <button className="button button-outline review-refresh" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>Refresh</button>
         </div>
-        <p className="review-intro">Check each athlete’s profile details before verifying. Only profiles from your district appear here.</p>
+        <p className="review-intro">Review athlete profiles from across RuralRise and verify players when their details are complete.</p>
         {loading ? <LoadingState label="Loading athlete profiles…" /> : pendingAthletes.length ? (
           <div className="review-list">
             {pendingAthletes.map((profile) => (
