@@ -223,7 +223,16 @@ router.get('/me', requireAuth, async (req: AuthenticatedRequest, res) => {
 router.post('/refresh', authLimiter, async (req, res) => {
   const sessionId = getTabSessionId(req);
   const tabCookieName = getRefreshCookieName(sessionId);
-  const refreshToken = req.cookies?.[tabCookieName];
+  const expectedUserId = req.header('x-ruralrise-user-id');
+  let refreshToken = req.cookies?.[tabCookieName];
+  let migratingLegacySession = false;
+  if (typeof refreshToken !== 'string' && sessionId && expectedUserId && /^[a-f\d]{24}$/i.test(expectedUserId)) {
+    const legacyToken = req.cookies?.[refreshCookieName];
+    if (typeof legacyToken === 'string') {
+      refreshToken = legacyToken;
+      migratingLegacySession = true;
+    }
+  }
   if (typeof refreshToken !== 'string') {
     clearRefreshCookie(res, sessionId);
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
@@ -241,11 +250,24 @@ router.post('/refresh', authLimiter, async (req, res) => {
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
   }
 
-  const user = await User.findById(payload.sub).select(sessionId ? '+refreshSessions' : '+refreshTokenHash');
+  if (expectedUserId && payload.sub !== expectedUserId) {
+    clearRefreshCookie(res, sessionId);
+    throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');
+  }
+
+  const user = await User.findById(payload.sub).select(sessionId ? '+refreshSessions +refreshTokenHash' : '+refreshTokenHash');
   const tokenHash = hashRefreshToken(refreshToken);
-  const sessionMatches = sessionId
+  let sessionMatches = sessionId
     ? user?.refreshSessions?.some((session: { sessionId: string; tokenHash: string }) => session.sessionId === sessionId && session.tokenHash === tokenHash)
     : user?.refreshTokenHash === tokenHash;
+  if (!sessionMatches && sessionId && migratingLegacySession && expectedUserId === payload.sub && user?.refreshTokenHash === tokenHash) {
+    await User.updateOne(
+      { _id: user._id, refreshTokenHash: tokenHash },
+      { $addToSet: { refreshSessions: { sessionId, tokenHash } } },
+    );
+    setRefreshCookie(res, refreshToken, sessionId);
+    sessionMatches = true;
+  }
   if (!user || !sessionMatches) {
     clearRefreshCookie(res, sessionId);
     throw new HttpError(401, 'SESSION_EXPIRED', 'Your session has expired. Please log in again.');

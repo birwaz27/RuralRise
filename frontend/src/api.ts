@@ -189,10 +189,14 @@ export async function refreshAccessToken(): Promise<string | null> {
     refreshInFlight = (async () => {
       let response: Response;
       try {
+        const expectedUserId = getSavedUser()?.id;
         response = await fetch(`${apiBase}/refresh`, {
           method: 'POST',
           credentials: 'include',
-          headers: { 'X-RuralRise-Session-Id': getTabSessionId() },
+          headers: {
+            'X-RuralRise-Session-Id': getTabSessionId(),
+            ...(expectedUserId ? { 'X-RuralRise-User-Id': expectedUserId } : {}),
+          },
         });
       } catch {
         throw new ApiError('Unable to reach the server. Please try again in a moment.');
