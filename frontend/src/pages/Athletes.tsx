@@ -1,4 +1,4 @@
-import { ArrowDownUp, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowDownUp, ChevronDown, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Athlete } from '../api';
 import AthleteCard from '../components/AthleteCard';
@@ -87,7 +87,12 @@ export default function Athletes() {
       <section className="container directory-results">
         <div className="results-toolbar">
           <span>{result ? <>SHOWING <b>{result.total ? (page - 1) * 12 + 1 : 0}–{Math.min(page * 12, result.total)}</b> OF <b>{result.total}</b> PROFILES</> : 'LOADING PROFILES'}</span>
-          <span className="sort-label"><ArrowDownUp size={14} /> PRIORITY PLACEMENT</span>
+          <div className="talent-pool-actions">
+            <span className="sort-label"><ArrowDownUp size={14} /> PRIORITY PLACEMENT</span>
+            <button className="button button-outline button-small" type="button" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+          </div>
         </div>
         {loading ? (
           <div className="athlete-grid">

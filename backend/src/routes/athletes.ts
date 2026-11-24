@@ -4,7 +4,7 @@ import type { AthleteProfileDocument } from '../models/AthleteProfile.js';
 import { z } from 'zod';
 import { AthleteProfile } from '../models/AthleteProfile.js';
 import { User } from '../models/User.js';
-import { requireAuth, requireRoles, requireVerifiedScoutOrAdmin, type AuthenticatedRequest } from '../middleware/auth.js';
+import { requireAuth, requireRoles, type AuthenticatedRequest } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { HttpError, sendSuccess } from '../utils/http.js';
 
@@ -108,6 +108,9 @@ router.post('/', requireAuth, validateBody(profileSchema), async (req: Authentic
     ...(req.body as z.infer<typeof profileSchema>),
     user: req.authUser.id,
   });
+  if (profile.district) {
+    await User.updateOne({ _id: req.authUser.id }, { $set: { district: profile.district.trim() } });
+  }
   sendSuccess(res, serializeProfile(profile), 201);
 });
 
@@ -182,10 +185,13 @@ router.patch('/:id', requireAuth, validateBody(profileSchema.partial()), async (
   }
   Object.assign(profile, req.body, { verificationStatus: 'pending', verifiedBy: undefined });
   await profile.save();
+  if (profile.district) {
+    await User.updateOne({ _id: profile.user }, { $set: { district: profile.district.trim() } });
+  }
   sendSuccess(res, serializeProfile(profile));
 });
 
-router.put('/:id/verification', requireAuth, requireVerifiedScoutOrAdmin(), validateBody(verificationSchema), async (req: AuthenticatedRequest, res) => {
+router.put('/:id/verification', requireAuth, requireRoles('admin'), validateBody(verificationSchema), async (req: AuthenticatedRequest, res) => {
   const id = req.params.id;
   if (typeof id !== 'string' || !/^[a-f\d]{24}$/i.test(id)) throw new HttpError(400, 'INVALID_ID', 'The supplied athlete ID is invalid.');
   const { status } = req.body as z.infer<typeof verificationSchema>;

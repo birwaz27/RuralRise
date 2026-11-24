@@ -112,16 +112,16 @@ export default function AthleteDetail() {
 
   if (loading) return (
     <div className="profile-page">
-      <div className="container profile-topbar"><BackLink /></div>
+      <div className="container profile-topbar"><BackLink to={user?.role === 'pe_teacher' ? '/dashboard' : '/athletes'} /></div>
       <SkeletonProfileHero />
     </div>
   );
-  if (error || !athlete) return <div className="container page-state"><BackLink /><ErrorState message={error || 'Athlete profile was not found.'} /></div>;
+  if (error || !athlete) return <div className="container page-state"><BackLink to={user?.role === 'pe_teacher' ? '/dashboard' : '/athletes'} /><ErrorState message={error || 'Athlete profile was not found.'} /></div>;
 
   const hasPhoto = Boolean(athlete.photoUrl);
   return (
     <div className="profile-page">
-      <div className="container profile-topbar"><BackLink /><span className="profile-top-note"><Sparkles size={14} /> EVERY GREAT STORY STARTS SOMEWHERE</span></div>
+      <div className="container profile-topbar"><BackLink to={user?.role === 'pe_teacher' ? '/dashboard' : '/athletes'} /><span className="profile-top-note"><Sparkles size={14} /> EVERY GREAT STORY STARTS SOMEWHERE</span></div>
       <section className="container profile-hero">
         <div className="profile-photo-wrap">
           {hasPhoto ? <img src={apiAsset(athlete.photoUrl)} alt={athlete.fullName} onError={(event) => { event.currentTarget.style.display = 'none'; }} /> : null}
