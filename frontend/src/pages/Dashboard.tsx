@@ -301,28 +301,6 @@ function PeTeacherDashboard({ user }: { user: User }) {
     return () => controller.abort();
   }, [user.id, user.isVerified, refresh]);
 
-  async function endorse(postId: string, status: 'endorsed' | 'correction_requested') {
-    setActiveId(postId);
-    setError('');
-    setNotice('');
-    try {
-      const note = status === 'endorsed' ? 'Verified by Physical Education Department.' : 'Please update achievement details.';
-      await api(`/pe-teacher/endorse/${postId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status, note }),
-      });
-      setData(prev => ({
-        ...prev,
-        posts: prev.posts.map(p => p.id === postId ? { ...p, endorsementStatus: status, endorsementNote: note } : p)
-      }));
-      setNotice(`Post has been ${status.replace('_', ' ')}.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update endorsement status.');
-    } finally {
-      setActiveId('');
-    }
-  }
-
   async function verifyAthlete(profile: Athlete) {
     setActiveId(profile.id);
     setError('');
@@ -433,7 +411,6 @@ function PeTeacherDashboard({ user }: { user: User }) {
           <div className="review-list">
             {data.posts.map((post) => {
               const athlete = post.athlete;
-              const endorsementStatus = post.endorsementStatus ?? 'unverified';
               return (
                 <article className="review-row achievement-review-row" key={post.id}>
                   <div className="review-profile">
@@ -445,16 +422,7 @@ function PeTeacherDashboard({ user }: { user: User }) {
                     ) : post.photoUrl ? (
                       <img className="teacher-achievement-media" src={apiAsset(post.photoUrl)} alt={`${post.title} achievement`} />
                     ) : null}
-                    <div className="post-meta-row">
-                      <small>Posted {new Date(post.createdAt).toLocaleDateString()}</small>
-                      <AchievementEndorsement status={endorsementStatus} />
-                    </div>
-                  </div>
-                  <div className="review-actions">
-                    <button className="button button-outline" disabled={activeId === post.id} onClick={() => endorse(post.id, 'correction_requested')}>Request Correction</button>
-                    <button className="button button-primary" disabled={activeId === post.id || endorsementStatus === 'endorsed'} onClick={() => endorse(post.id, 'endorsed')}>
-                      {activeId === post.id ? 'Saving…' : endorsementStatus === 'endorsed' ? 'Endorsed' : 'Approve & Endorse'}
-                    </button>
+                    <small>Posted {new Date(post.createdAt).toLocaleDateString()}</small>
                   </div>
                 </article>
               );
