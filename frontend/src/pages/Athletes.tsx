@@ -1,4 +1,4 @@
-import { ArrowDownUp, BadgeCheck, ChevronDown, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ArrowDownUp, ChevronDown, RefreshCw, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { api, type Athlete } from '../api';
 import AthleteCard from '../components/AthleteCard';
@@ -11,7 +11,6 @@ export default function Athletes() {
   const [sport, setSport] = useState('');
   const [region, setRegion] = useState('');
   const [district, setDistrict] = useState('');
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [page, setPage] = useState(1);
   const [result, setResult] = useState<DirectoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -25,9 +24,8 @@ export default function Athletes() {
     if (sport) params.set('sport', sport);
     if (region) params.set('region', region);
     if (district) params.set('district', district);
-    if (verifiedOnly) params.set('status', 'verified');
     return params.toString();
-  }, [search, sport, region, district, verifiedOnly, page]);
+  }, [search, sport, region, district, page]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -65,12 +63,12 @@ export default function Athletes() {
         <div className="container">
           <div className="directory-kicker"><span className="live-dot" /> THE TALENT POOL</div>
           <div className="directory-title-row">
-            <div><h1>Scout the <span>next generation.</span></h1><p>Search emerging athletes by name, sport, and home district.</p></div>
+            <div><h1>Meet the <span>game changers.</span></h1><p>Big potential, small-town beginnings. The next name you remember is right here.</p></div>
             <span className="directory-count">{result ? String(result.total).padStart(2, '0') : '—'} <small>ATHLETES<br />AND COUNTING</small></span>
           </div>
           <div className="directory-search">
             <Search size={19} />
-            <input aria-label="Search athletes" placeholder="Search by athlete name or sport" value={search} onChange={(event) => updateFilter(() => setSearch(event.target.value))} />
+            <input aria-label="Search athletes" placeholder="Search a name, sport, or anything..." value={search} onChange={(event) => updateFilter(() => setSearch(event.target.value))} />
             {search && <button className="search-clear" aria-label="Clear search" onClick={() => updateFilter(() => setSearch(''))}><X size={15} /></button>}
             <button className={`filter-toggle${filtersOpen ? ' active' : ''}`} onClick={() => setFiltersOpen(!filtersOpen)}>
               <SlidersHorizontal size={16} /> Filters{activeFilters > 0 && <span className="filter-count">{activeFilters}</span>}<ChevronDown size={14} />
@@ -90,7 +88,6 @@ export default function Athletes() {
         <div className="results-toolbar">
           <span>{result ? <>SHOWING <b>{result.total ? (page - 1) * 12 + 1 : 0}–{Math.min(page * 12, result.total)}</b> OF <b>{result.total}</b> PROFILES</> : 'LOADING PROFILES'}</span>
           <div className="talent-pool-actions">
-            <div className="verified-filter-toggle" role="group" aria-label="Profile verification filter"><button type="button" className={!verifiedOnly ? 'active' : ''} onClick={() => { setVerifiedOnly(false); setPage(1); }}>All</button><button type="button" className={verifiedOnly ? 'active' : ''} onClick={() => { setVerifiedOnly(true); setPage(1); }}><BadgeCheck size={13} /> Verified only</button></div>
             <span className="sort-label"><ArrowDownUp size={14} /> PRIORITY PLACEMENT</span>
             <button className="button button-outline button-small" type="button" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
               <RefreshCw size={14} /> Refresh

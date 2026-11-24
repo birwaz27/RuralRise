@@ -5,7 +5,6 @@ import { api, apiAsset, type AchievementPost, type AchievementPostPage, type Ath
 import { useAuth } from '../auth';
 import AchievementEndorsement from '../components/AchievementEndorsement';
 import AthleteCard from '../components/AthleteCard';
-import CertificatePreview from '../components/CertificatePreview';
 import { BackLink, EmptyState, ErrorState, SkeletonProfileHero } from '../components/States';
 
 export default function AthleteDetail() {
@@ -16,7 +15,6 @@ export default function AthleteDetail() {
   const [relatedError, setRelatedError] = useState('');
   const [shortlisted, setShortlisted] = useState(false);
   const [posts, setPosts] = useState<AchievementPost[]>([]);
-  const [postFilter, setPostFilter] = useState<'all' | 'certificates' | 'achievements'>('all');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -121,7 +119,6 @@ export default function AthleteDetail() {
   if (error || !athlete) return <div className="container page-state"><BackLink to={user?.role === 'pe_teacher' ? '/dashboard' : '/athletes'} /><ErrorState message={error || 'Athlete profile was not found.'} /></div>;
 
   const hasPhoto = Boolean(athlete.photoUrl);
-  const visiblePosts = posts.filter((post) => postFilter === 'all' || (postFilter === 'certificates' ? post.hasCertificate : !post.hasCertificate));
   return (
     <div className="profile-page">
       <div className="container profile-topbar"><BackLink to={user?.role === 'pe_teacher' ? '/dashboard' : '/athletes'} /><span className="profile-top-note"><Sparkles size={14} /> EVERY GREAT STORY STARTS SOMEWHERE</span></div>
@@ -166,8 +163,7 @@ export default function AthleteDetail() {
             )}
             {posts.length > 0 && (
               <div className="profile-posts-list" style={{ marginTop: athlete.tournaments.length ? '20px' : '0' }}>
-                <div className="profile-post-filters" role="group" aria-label="Filter athlete posts">{(['all', 'certificates', 'achievements'] as const).map((filter) => <button key={filter} type="button" className={postFilter === filter ? 'active' : ''} onClick={() => setPostFilter(filter)}>{filter === 'all' ? 'All' : filter === 'certificates' ? 'Certificates' : 'Achievements'}</button>)}</div>
-                {visiblePosts.map((post) => (
+                {posts.map((post) => (
                   <div className="profile-achievement-card" key={post.id} style={{ border: '1px solid #dfe5e8', background: '#fff', padding: '16px', marginBottom: '12px' }}>
                     {(post.videoUrl || post.photoUrl) && (
                       <div className="profile-achievement-photo" style={{ marginBottom: '12px', overflow: 'hidden', background: '#e6eef1', maxHeight: '300px' }}>
@@ -181,7 +177,6 @@ export default function AthleteDetail() {
                     <h4 style={{ margin: '0 0 6px', fontSize: '15px', color: '#2f3d43', fontFamily: 'var(--serif)' }}>{post.title}</h4>
                     <p style={{ margin: '0 0 10px', fontSize: '11px', color: '#778173', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>{post.description}</p>
                     <AchievementEndorsement status={post.endorsementStatus} />
-                    {post.hasCertificate && post.certificateUrl && <div className="profile-certificate"><span className={`status-chip${post.verificationStatus === 'verified' ? ' certificate-verified' : ''}`}>{post.verificationStatus === 'verified' ? 'PE verified certificate' : `Certificate ${post.verificationStatus ?? 'pending'}`}</span><CertificatePreview url={post.certificateUrl} title={`${post.title} certificate`} /></div>}
                     <span style={{ fontSize: '9px', color: '#929a8f' }}>{post.eventDate ? `Event date: ${new Date(`${post.eventDate.slice(0, 10)}T12:00:00`).toLocaleDateString()}` : `Shared ${new Date(post.createdAt).toLocaleDateString()}`}</span>
                   </div>
                 ))}
