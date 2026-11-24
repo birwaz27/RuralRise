@@ -85,7 +85,7 @@ function Header() {
             {user && <NavLink to="/athletes" onClick={closeMenu}>Talent pool</NavLink>}
             {user && <NavLink to="/events" onClick={closeMenu}>Events</NavLink>}
             {!user && <Link to="/#about" onClick={handleAboutClick}>About</Link>}
-            <div className="nav-contact" ref={contactRef}>
+            {user && <div className="nav-contact" ref={contactRef}>
               <button
                 type="button"
                 className={`nav-contact-toggle${contactOpen ? ' active' : ''}`}
@@ -101,7 +101,7 @@ function Header() {
                   <a href="mailto:birwaz27@gmail.com" onClick={closeMenu}>birwaz27@gmail.com</a>
                 </div>
               )}
-            </div>
+            </div>}
             <span className="nav-mobile-divider" />
             {user ? (
               <>
