@@ -1249,35 +1249,3 @@ input:focus, textarea:focus, select:focus { border-color: #10B981; outline-color
 .profile-certificate .certificate-preview { width: min(100%, 520px); height: 300px; border-radius: 10px; background: #F1F5F9; object-fit: contain; }
 .status-chip.certificate-verified { background: #D1FAE5; color: #047857; }
 @media (max-width: 900px) { .mobile-menu-toggle { border-color: rgba(255,255,255,.28); background: rgba(255,255,255,.08); color: #fff; } .main-nav .button-outline { border-color: rgba(255,255,255,.28); background: transparent; color: #fff; } }
-
-/* Bright-room palette adjustment */
-:root {
-  --paper: #F1F5F9;
-  --card-bg: #FFFFFF;
-  --card-bg-elevated: #FFFFFF;
-  --line: #CBD5E1;
-  --green: #059669;
-  --forest: #0F172A;
-  --stadium-navy: #0F172A;
-  --emerald: #059669;
-  --shadow-card: 0 4px 20px rgba(15, 23, 42, .05);
-  background: #F1F5F9;
-}
-html, body, .champ-home, .auth-page { background-color: #F1F5F9; }
-.site-header, .main-nav, .directory-hero, .profile-hero, .auth-aside, .dashboard-welcome,
-.champ-hero, .champ-journey-card.navy, .champ-final-cta, .site-footer { background-color: #0F172A; }
-.champ-hero { background-color: #0F172A; background-image: radial-gradient(ellipse at 78% 15%, rgba(5,150,105,.2), transparent 36%); }
-.hero-section { background-color: #0F172A; background-image: radial-gradient(ellipse at 78% 15%, rgba(5,150,105,.2), transparent 37%), linear-gradient(100deg, rgba(15,23,42,.98), rgba(15,23,42,.8)), url('/basketball-hero.jpg'); }
-.button-primary, .button-lime, .champ-button-green { background-color: #059669; color: #fff; }
-.button-primary:hover:not(:disabled), .button-lime:hover:not(:disabled), .champ-button-green:hover { background-color: #047857; color: #fff; }
-.button-outline:hover:not(:disabled), .role-option.selected { border-color: #059669; }
-.champ-journey-card, .champ-achievement-card, .athlete-card, .event-card, .applicant-card,
-.review-row, .review-section, .quick-facts, .connect-card, .profile-story, .achievements-block,
-.profile-checklist, .dashboard-tip, .compact-profile-card, .achievement-form-card,
-.auth-form-wrap, .dashboard-note, .dashboard-empty, .profile-achievement-card,
-.certificate-queue-card, .event-detail-card, .event-create-panel, .directory-search, .filter-panel {
-  border-color: #CBD5E1;
-}
-.champ-achievements-section { background: #E8EEF5; }
-.champ-verified-pill, .verified-chip, .verified-filter-toggle button.active { background: #D1FAE5; color: #065F46; }
-@media (max-width: 900px) { .main-nav { background: #0F172A; } }
