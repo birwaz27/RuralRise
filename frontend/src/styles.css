@@ -1075,3 +1075,8 @@ body:has(.home-page) .site-footer .brand-light .brand-name > span { color: #52B7
 .achievement-own-post-info strong { overflow-wrap: anywhere; font-size: 13px; }
 .achievement-own-post-info span { color: var(--muted); font-family: var(--mono, monospace); font-size: 10px; }
 @media (max-width: 900px) { .achievement-layout { grid-template-columns: 1fr; } }
+.achievement-own-post-info { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.achievement-own-post-copy { display: grid; gap: 6px; min-width: 0; }
+.achievement-own-edit-form { grid-column: 1 / -1; }
+.achievement-own-actions { align-items: center; }
+.achievement-own-actions button { border-radius: 8px; }

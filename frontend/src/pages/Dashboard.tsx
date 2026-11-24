@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trophy, UserRound, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trash2, Trophy, UserRound, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api, apiAsset, ApiError, type AchievementPost, type AchievementPostPage, type Athlete, type Connection, type User } from '../api';
@@ -382,6 +382,13 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(Boolean(profile));
   const [saving, setSaving] = useState(false);
+  const [removingId, setRemovingId] = useState('');
+  const [editingPostId, setEditingPostId] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editEventDate, setEditEventDate] = useState('');
+  const [editMedia, setEditMedia] = useState<File | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
@@ -407,14 +414,11 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
     api<AchievementPostPage>('/posts/mine?limit=5', { signal: controller.signal })
       .then((result) => setPosts(result.items))
       .catch((requestError: unknown) => {
-        if (!controller.signal.aborted) {
-          setError(requestError instanceof Error ? requestError.message : 'Could not load your achievements.');
-        }
+        if (!controller.signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Could not load your achievements.');
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [profile?.id]);
-
   async function publish(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!media) {
@@ -454,6 +458,38 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
     }
   }
 
+  async function removePost(post: AchievementPost) {
+    if (!window.confirm('Delete this achievement post?')) return;
+    setRemovingId(post.id); setError(''); setSuccess('');
+    try {
+      await api(`/posts/${post.id}`, { method: 'DELETE' });
+      setPosts((current) => current.filter((item) => item.id !== post.id));
+      setSuccess('Achievement removed.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Could not remove this achievement.');
+    } finally { setRemovingId(''); }
+  }
+
+  function startEditingPost(post: AchievementPost) {
+    setEditingPostId(post.id); setEditTitle(post.title); setEditDescription(post.description);
+    setEditEventDate(post.eventDate?.slice(0, 10) ?? ''); setEditMedia(null); setError(''); setSuccess('');
+  }
+
+  function cancelEditingPost() { setEditingPostId(''); setEditMedia(null); setError(''); }
+
+  async function savePost(event: React.FormEvent<HTMLFormElement>, post: AchievementPost) {
+    event.preventDefault(); setEditSaving(true); setError(''); setSuccess('');
+    try {
+      const body = new FormData();
+      body.append('title', editTitle); body.append('description', editDescription); body.append('eventDate', editEventDate);
+      if (editMedia) body.append('photo', editMedia);
+      const updatedPost = await api<AchievementPost>(`/posts/${post.id}`, { method: 'PATCH', body });
+      setPosts((current) => current.map((item) => item.id === updatedPost.id ? updatedPost : item));
+      setEditingPostId(''); setEditMedia(null); setSuccess('Achievement updated.');
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Could not update this achievement.');
+    } finally { setEditSaving(false); }
+  }
   if (!profile) {
     return (
       <section className="achievement-section">
@@ -515,8 +551,29 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
             <article className="achievement-own-post" key={post.id}>
               {post.videoUrl ? <video className="achievement-own-photo" src={apiAsset(post.videoUrl)} muted playsInline preload="metadata" aria-label={post.title} /> : post.photoUrl ? <img className="achievement-own-photo" src={apiAsset(post.photoUrl)} alt={post.title} /> : null}
               <div className="achievement-own-post-info">
-                <strong>{post.title}</strong>
-                <span>{post.eventDate ? new Date(`${post.eventDate.slice(0, 10)}T12:00:00`).toLocaleDateString() : new Date(post.createdAt).toLocaleDateString()}</span>
+                {editingPostId === post.id ? (
+                  <form className="achievement-own-edit-form" onSubmit={(event) => savePost(event, post)}>
+                    <label className="field-label">TITLE<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} minLength={3} maxLength={120} required /></label>
+                    <label className="field-label">YOUR STORY<textarea rows={3} value={editDescription} onChange={(event) => setEditDescription(event.target.value)} maxLength={1500} required /></label>
+                    <label className="field-label">DATE<input type="date" value={editEventDate} onChange={(event) => setEditEventDate(event.target.value)} /></label>
+                    <label className="field-label">REPLACE PHOTO OR VIDEO<input type="file" accept="image/png,image/jpeg,video/mp4,video/webm" onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      const mediaError = file ? achievementMediaError(file) : '';
+                      setEditMedia(mediaError ? null : file);
+                      setError(mediaError);
+                    }} /></label>
+                    <div className="achievement-own-edit-actions"><button type="button" className="button button-outline" onClick={cancelEditingPost} disabled={editSaving}>Cancel</button><button type="submit" className="button button-primary" disabled={editSaving}>{editSaving ? 'Saving…' : 'Save'} <Check size={14} /></button></div>
+                  </form>
+                ) : <>
+                  <div className="achievement-own-post-copy">
+                    <strong>{post.title}</strong>
+                    <span>{post.eventDate ? new Date(`${post.eventDate.slice(0, 10)}T12:00:00`).toLocaleDateString() : new Date(post.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="achievement-own-actions">
+                    <button type="button" className="achievement-edit" aria-label={`Edit ${post.title}`} title="Edit post" onClick={() => startEditingPost(post)}><Pencil size={15} /></button>
+                    <button type="button" className="achievement-delete" aria-label={`Delete ${post.title}`} title="Delete post" disabled={removingId === post.id} onClick={() => void removePost(post)}><Trash2 size={15} /></button>
+                  </div>
+                </>}
               </div>
             </article>
           )) : <p className="achievement-own-empty">Your achievements will appear here after you share your first post.</p>}
