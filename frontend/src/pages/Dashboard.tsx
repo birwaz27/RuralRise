@@ -1,4 +1,4 @@
-import { ArrowRight, BadgeCheck, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trash2, Trophy, UserRound, X } from 'lucide-react';
+import { ArrowRight, BadgeCheck, CalendarDays, Check, ChevronRight, CircleUserRound, ClipboardCheck, Heart, ImagePlus, MapPin, Pencil, RefreshCw, ShieldCheck, Trash2, Trophy, UserRound, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { api, apiAsset, ApiError, type AchievementPost, type AchievementPostPage, type Athlete, type Connection, type User } from '../api';
@@ -118,7 +118,12 @@ function HostDashboard({ user }: { user: User }) {
       {loading ? <SkeletonDashboardStats /> : (
         <div className="dashboard-stats scout-dashboard-stats"><div><span>ON YOUR RADAR</span><strong>{String(shortlist.length).padStart(2, '0')}</strong></div><div><span>INTRODUCTIONS SENT</span><strong>{String(connections.length).padStart(2, '0')}</strong></div></div>
       )}
-      <div className="dashboard-section-heading"><div><span className="eyebrow">THE ONES TO WATCH</span><h2>Your shortlist.</h2></div><div className="dashboard-heading-actions"><Link className="button button-outline" to="/events">Scout events</Link><Link className="text-link" to="/athletes">Find more talent <ArrowRight size={15} /></Link></div></div>
+      <section className="scout-event-action">
+        <span className="scout-event-action-icon"><CalendarDays size={21} /></span>
+        <div className="scout-event-action-copy"><span className="eyebrow">TRIALS & OPPORTUNITIES</span><h2>Scout events.</h2><p>Post a new trial, review applicants, and manage player selections.</p></div>
+        <Link className="button button-primary" to="/events">Open events hub <ArrowRight size={15} /></Link>
+      </section>
+      <div className="dashboard-section-heading"><div><span className="eyebrow">THE ONES TO WATCH</span><h2>Your shortlist.</h2></div><div className="dashboard-heading-actions"><Link className="text-link" to="/athletes">Find more talent <ArrowRight size={15} /></Link></div></div>
       {loading ? <LoadingState label="Loading your scouting desk…" /> : error ? <ErrorState message={error} onRetry={() => setRefresh((value) => value + 1)} /> : shortlist.length ? <div className="athlete-grid">{shortlist.map((athlete, index) => <AthleteCard key={athlete.id} athlete={athlete} index={index} />)}</div> : <div className="dashboard-empty"><span className="empty-icon"><Heart size={20} /></span><div><h3>Your shortlist is a blank canvas.</h3><p>Save profiles that catch your eye to keep your scouting organized.</p></div><Link className="button button-primary" to="/athletes">Find your first prospect <ArrowRight size={15} /></Link></div>}
       <div className="dashboard-section-heading dashboard-lower-heading"><div><span className="eyebrow">OUTREACH, AT A GLANCE</span><h2>Introductions.</h2></div></div>
       {connections.length ? <div className="request-list">{connections.map((connection) => <div className="request-row" key={connection.id}><span className="request-avatar">{connection.athlete?.fullName?.slice(0, 1) || 'R'}</span><div><strong>{connection.athlete?.fullName || 'Athlete profile'}</strong><span>{connection.athlete?.sport || 'Talent'} · {connection.athlete?.district || 'Location unavailable'}</span></div><p>{connection.message}</p><span className={`request-status status-${connection.status}`}>{connection.status}</span></div>)}</div> : <div className="dashboard-note">No introductions yet. When you reach out to an athlete, you’ll find it here.</div>}

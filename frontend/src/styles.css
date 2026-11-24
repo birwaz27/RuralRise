@@ -1080,3 +1080,9 @@ body:has(.home-page) .site-footer .brand-light .brand-name > span { color: #52B7
 .achievement-own-edit-form { grid-column: 1 / -1; }
 .achievement-own-actions { align-items: center; }
 .achievement-own-actions button { border-radius: 8px; }
+.scout-event-action { display: flex; align-items: center; gap: 16px; margin: 22px 0 38px; padding: 20px 22px; border: 1px solid var(--line); border-radius: 12px; background: #FAF6F2; }
+.scout-event-action-icon { width: 46px; height: 46px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 12px; background: #DDF1E7; color: #1F6B4F; }
+.scout-event-action-copy { flex: 1; min-width: 0; }
+.scout-event-action-copy h2 { margin: 3px 0 4px; font-size: 20px; }
+.scout-event-action-copy p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+@media (max-width: 600px) { .scout-event-action { align-items: start; flex-wrap: wrap; padding: 17px; } .scout-event-action-copy { flex-basis: calc(100% - 64px); } .scout-event-action > .button { width: 100%; } }
