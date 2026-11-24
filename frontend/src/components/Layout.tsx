@@ -83,6 +83,7 @@ function Header() {
           <nav className={`main-nav${menuOpen ? ' is-open' : ''}`} aria-label="Main navigation">
             <NavLink to="/" end onClick={closeMenu}>Home</NavLink>
             {user && <NavLink to="/athletes" onClick={closeMenu}>Talent pool</NavLink>}
+            {user && <NavLink to="/events" onClick={closeMenu}>Events</NavLink>}
             {!user && <Link to="/#about" onClick={handleAboutClick}>About</Link>}
             <div className="nav-contact" ref={contactRef}>
               <button
