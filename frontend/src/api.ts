@@ -46,7 +46,39 @@ export type AchievementPost = {
   mediaType: 'image' | 'video';
   endorsementStatus?: 'unverified' | 'endorsed' | 'correction_requested';
   endorsementNote?: string | null;
+  verificationStatus?: 'pending' | 'verified' | 'rejected';
+  verificationNotes?: string | null;
+  certificateUrl?: string | null;
+  hasCertificate?: boolean;
   athlete: Pick<Athlete, 'id' | 'fullName' | 'sport' | 'district' | 'region' | 'verificationStatus' | 'photoUrl'>;
+};
+
+export type EventApplicant = {
+  player: Pick<Athlete, 'id' | 'userId' | 'fullName' | 'age' | 'sport' | 'district' | 'region' | 'bio' | 'verificationStatus'> & {
+    certificates: Array<{ id: string; title: string; eventDate: string | null; verificationStatus: 'verified'; certificateUrl: string }>;
+  } | null;
+  message: string;
+  status: 'interested' | 'shortlisted' | 'selected' | 'rejected';
+  appliedAt: string;
+  registrationConfirmed: boolean;
+  sponsorshipStatus: 'pending' | 'confirmed' | 'not_applicable';
+  sponsorshipNote: string;
+};
+
+export type ScoutEvent = {
+  id: string;
+  title: string;
+  sport: string;
+  description: string;
+  location: string;
+  eventDate: string;
+  registrationDeadline: string;
+  sponsorshipDetails: string;
+  status: 'open' | 'closed';
+  createdBy: string;
+  applicantCount: number;
+  myApplication?: { status: EventApplicant['status']; sponsorshipStatus?: EventApplicant['sponsorshipStatus'] } | null;
+  applicants?: EventApplicant[];
 };
 
 export type AchievementPostPage = {
@@ -96,11 +128,23 @@ export function getToken(): string | null {
   }
 }
 
+function isUser(value: unknown): value is User {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Record<string, unknown>;
+  return typeof candidate.id === 'string'
+    && typeof candidate.username === 'string'
+    && typeof candidate.email === 'string'
+    && ['talent', 'host', 'admin', 'pe_teacher'].includes(candidate.role as string);
+}
+
 export function getLocalUser(): User | null {
   try {
     const saved = localStorage.getItem(localStorageUserKey);
     if (!saved) return null;
-    return JSON.parse(saved) as User;
+    const user = JSON.parse(saved) as unknown;
+    if (isUser(user)) return user;
+    localStorage.removeItem(localStorageUserKey);
+    return null;
   } catch {
     localStorage.removeItem(localStorageUserKey);
     return null;
@@ -129,16 +173,15 @@ export function getSavedUser(): User | null {
   try {
     removeLegacySharedSession();
     const saved = sessionStorage.getItem(sessionKey);
-    const userFromSession = saved ? (JSON.parse(saved) as { user?: User }).user ?? null : null;
-    if (!userFromSession) {
-      const localUser = getLocalUser();
-      if (localUser) {
-        removeLegacySharedSession();
-        sessionStorage.setItem(sessionKey, JSON.stringify({ user: localUser, accessToken: getToken() }));
-      }
-      return localUser;
+    const userFromSession: unknown = saved ? (JSON.parse(saved) as { user?: unknown }).user : null;
+    if (isUser(userFromSession)) return userFromSession;
+
+    const localUser = getLocalUser();
+    if (localUser) {
+      removeLegacySharedSession();
+      sessionStorage.setItem(sessionKey, JSON.stringify({ user: localUser, accessToken: getToken() }));
     }
-    return userFromSession;
+    return localUser;
   } catch {
     sessionStorage.removeItem(sessionKey);
     return null;
@@ -165,7 +208,7 @@ async function sendRequest(path: string, options: RequestInit, token: string | n
   }
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+export async function refreshAccessToken(): Promise<string | null> {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       let response: Response;
@@ -177,6 +220,7 @@ async function refreshAccessToken(): Promise<string | null> {
 
       const body = (await response.json().catch(() => null)) as ApiEnvelope<{ user: User; accessToken: string }> | null;
       if (response.status === 401) {
+        clearSession();
         return null;
       }
       if (!response.ok || !body?.success) {
@@ -204,14 +248,16 @@ function isAuthEndpoint(path: string): boolean {
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = getToken();
   let response = await sendRequest(path, options, token);
-  if (response.status === 401 && token && !isAuthEndpoint(path)) {
+  if (response.status === 401 && !isAuthEndpoint(path)) {
     const refreshedToken = await refreshAccessToken();
     if (!refreshedToken) {
+      clearSession();
       window.dispatchEvent(new Event(sessionExpiredEvent));
       throw new ApiError('Your session has expired. Please log in again.', 'SESSION_EXPIRED');
     }
     response = await sendRequest(path, options, refreshedToken);
     if (response.status === 401) {
+      clearSession();
       window.dispatchEvent(new Event(sessionExpiredEvent));
       throw new ApiError('Your session has expired. Please log in again.', 'SESSION_EXPIRED');
     }
@@ -226,16 +272,29 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     );
   }
 
-  if (body.data) {
-    const responseUser = Array.isArray(body.data) ? body.data[0] : body.data;
-    if (responseUser && typeof responseUser === 'object' && 'id' in responseUser) {
-      const user = responseUser as User;
-      if (token) {
-        saveLocalUser(user);
-      }
-    }
+  const responseData: unknown = body.data;
+  const candidateUser = responseData && typeof responseData === 'object' && 'user' in responseData
+    ? (responseData as { user: unknown }).user
+    : responseData;
+  const responseUser = Array.isArray(candidateUser) ? candidateUser[0] : candidateUser;
+  if (token && isUser(responseUser)) {
+    saveLocalUser(responseUser);
   }
   return body.data;
+}
+
+export async function apiBlob(path: string): Promise<Blob> {
+  let response = await sendRequest(path, {}, getToken());
+  if (response.status === 401) {
+    const token = await refreshAccessToken();
+    if (!token) throw new ApiError('Your session has expired. Please log in again.', 'SESSION_EXPIRED');
+    response = await sendRequest(path, {}, token);
+  }
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as ApiEnvelope<unknown> | null;
+    throw new ApiError(body?.error?.message || 'Could not load this document.', body?.error?.code);
+  }
+  return response.blob();
 }
 
 export function apiAsset(path: string): string {
