@@ -6,7 +6,6 @@ import { useAuth } from '../auth';
 import AchievementEndorsement from '../components/AchievementEndorsement';
 import AthleteCard from '../components/AthleteCard';
 import { ErrorState, LoadingState, SkeletonDashboardStats } from '../components/States';
-import CertificatePreview from '../components/CertificatePreview';
 
 type DirectoryPage = { items: Athlete[]; pages: number };
 type ProfileForm = {
@@ -227,51 +226,6 @@ function AdminDashboard() {
   );
 }
 
-type PendingCertificate = {
-  id: string; title: string; description: string; eventDate: string | null; createdAt: string;
-  certificateUrl: string; verificationStatus: 'pending';
-  athlete: { id: string; fullName: string; sport: string; district: string; region: string } | null;
-};
-
-function CertificateVerificationQueue() {
-  const [items, setItems] = useState<PendingCertificate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refresh, setRefresh] = useState(0);
-  const [activeId, setActiveId] = useState('');
-  const [notes, setNotes] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
-  const [expanded, setExpanded] = useState('');
-  useEffect(() => {
-    const controller = new AbortController(); setLoading(true); setError('');
-    api<PendingCertificate[]>('/pe-teacher/pending-verifications', { signal: controller.signal, cache: 'no-store' })
-      .then(setItems).catch((requestError: unknown) => { if (!controller.signal.aborted) setError(requestError instanceof Error ? requestError.message : 'Could not load certificate queue.'); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [refresh]);
-  async function review(item: PendingCertificate, status: 'verified' | 'rejected') {
-    setActiveId(item.id); setError(''); setNotice('');
-    try {
-      await api(`/pe-teacher/verify/${item.id}`, { method: 'PATCH', body: JSON.stringify({ status, notes: notes[item.id] ?? '' }) });
-      setItems((current) => current.filter((candidate) => candidate.id !== item.id));
-      setNotice(`${item.title} was ${status}.`);
-    } catch (requestError) { setError(requestError instanceof Error ? requestError.message : 'Could not review this certificate.'); }
-    finally { setActiveId(''); }
-  }
-  return <section className="review-section certificate-queue">
-    <div className="dashboard-section-heading"><div><span className="eyebrow">DOCUMENT REVIEW</span><h2>Certificate verification queue.</h2></div><div className="queue-heading-actions"><span className="filter-count">{items.length}</span><button className="button button-outline" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>Refresh</button></div></div>
-    <p className="review-intro">Inspect achievement certificates from athletes in your district. Your decision and notes are attached to the achievement.</p>
-    {error && <div className="form-error review-feedback" role="alert">{error}</div>}{notice && <div className="form-success review-feedback" role="status"><Check size={15} />{notice}</div>}
-    {loading ? <LoadingState label="Loading certificates awaiting review…" /> : items.length ? <div className="review-list">{items.map((item) => <article className="review-row certificate-review-row" key={item.id}>
-      <div className="review-profile"><strong>{item.title}</strong><span>{item.athlete?.fullName ?? 'Athlete'} · {item.athlete?.sport ?? ''} · {item.athlete?.district ?? ''}</span><p>{item.description}</p><small>Submitted {new Date(item.createdAt).toLocaleDateString()}</small>
-        <button className="button button-outline" type="button" onClick={() => setExpanded(expanded === item.id ? '' : item.id)}>{expanded === item.id ? 'Hide certificate' : 'Inspect certificate'}</button>
-        {expanded === item.id && <CertificatePreview url={item.certificateUrl} title={item.title} />}
-        <label className="field-label certificate-note">REVIEW NOTES<textarea rows={2} maxLength={500} value={notes[item.id] ?? ''} onChange={(event) => setNotes((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="Add context for the athlete or reviewer" /></label>
-      </div><div className="review-actions"><button className="button button-outline" disabled={activeId === item.id} onClick={() => review(item, 'rejected')}>Reject</button><button className="button button-primary" disabled={activeId === item.id} onClick={() => review(item, 'verified')}>{activeId === item.id ? 'Saving…' : 'Verify'}</button></div>
-    </article>)}</div> : <div className="dashboard-note">No certificates are waiting for verification.</div>}
-  </section>;
-}
-
 function PeTeacherDashboard({ user }: { user: User }) {
   const [data, setData] = useState<{ athletes: Athlete[] }>({ athletes: [] });
   const [loading, setLoading] = useState(true);
@@ -346,8 +300,6 @@ function PeTeacherDashboard({ user }: { user: User }) {
         <div><span>PENDING ATHLETE PROFILES</span><strong>{String(pendingAthletes.length).padStart(2, '0')}</strong></div>
         <div><span>INSTITUTION</span><strong className="stat-status">{user.institutionName || 'N/A'}</strong></div>
       </div>
-
-      <CertificateVerificationQueue />
 
       {error && <div className="form-error review-feedback" role="alert">{error}</div>}
       {notice && <div className="form-success review-feedback" role="status"><Check size={15} />{notice}</div>}
