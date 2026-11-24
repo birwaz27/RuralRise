@@ -5,6 +5,8 @@ import { AuthProvider } from './auth';
 import App from './App';
 import './styles.css';
 
+window.history.scrollRestoration = 'manual';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

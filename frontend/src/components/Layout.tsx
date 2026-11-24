@@ -127,7 +127,10 @@ function ScrollToHash() {
   const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    if (!hash) return;
+    if (!hash) {
+      const timeout = window.setTimeout(() => window.scrollTo({ top: 0, left: 0, behavior: 'auto' }), 0);
+      return () => window.clearTimeout(timeout);
+    }
     const targetId = decodeURIComponent(hash.slice(1));
     const timeout = window.setTimeout(() => {
       const target = document.getElementById(targetId);
