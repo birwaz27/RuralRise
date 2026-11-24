@@ -380,8 +380,7 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
   const [media, setMedia] = useState<File | null>(null);
   const [certificate, setCertificate] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState('');
-  const mediaInputRef = useRef<HTMLInputElement>(null);
-  const certificateInputRef = useRef<HTMLInputElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(Boolean(profile));
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState('');
@@ -455,8 +454,7 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
       setEventDate('');
       setMedia(null);
       setCertificate(null);
-      if (mediaInputRef.current) mediaInputRef.current.value = '';
-      if (certificateInputRef.current) certificateInputRef.current.value = '';
+      if (uploadInputRef.current) uploadInputRef.current.value = '';
       setSuccess('Your achievement is now visible in the achievements feed.');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Could not share your achievement.');
@@ -561,32 +559,31 @@ function AchievementSection({ profile }: { profile: Athlete | null }) {
           <label className="field-label">TITLE<input value={title} onChange={(event) => setTitle(event.target.value)} minLength={3} maxLength={120} placeholder="e.g. District Athletics Championship" required /></label>
           <label className="field-label">YOUR STORY<textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} maxLength={1500} placeholder="Share your result or a detail scouts should know." required /></label>
           <section className="achievement-upload-step combined-upload-step" aria-labelledby="achievement-upload-heading">
-            <div className="achievement-upload-step-heading"><span><ImagePlus size={17} /></span><div><b id="achievement-upload-heading">Upload Achievement or Certificate</b><small>Add achievement media, an official certificate, or both.</small></div></div>
-            <div className="combined-upload-options">
-              <div className="combined-upload-option">
-                <div className="combined-upload-label"><b>Achievement photo or video</b><small>Required · PNG/JPG up to 2 MB · MP4/WebM up to 25 MB</small></div>
-                <label className="achievement-file-picker"><input ref={mediaInputRef} type="file" accept="image/png,image/jpeg,video/mp4,video/webm" aria-label="Upload achievement photo or video" onChange={(event) => {
-                  const file = event.target.files?.[0];
-                  setError('');
-                  if (!file) {
-                    setMedia(null);
-                  } else {
-                    const mediaError = achievementMediaError(file);
-                    setMedia(mediaError ? null : file);
-                    if (mediaError) {
-                      setError(mediaError);
-                      if (mediaInputRef.current) mediaInputRef.current.value = '';
-                    }
-                  }
-                }} required /><span className="achievement-file-picker-button">Choose photo or video</span><span className="achievement-file-picker-name">{media?.name ?? 'No achievement file selected'}</span></label>
-                {media && <button className="achievement-file-clear" type="button" onClick={() => { setMedia(null); if (mediaInputRef.current) mediaInputRef.current.value = ''; }}>Remove achievement file</button>}
-              </div>
-              <div className="combined-upload-option certificate-upload-step">
-                <div className="combined-upload-label"><b>Certificate document</b><small>Optional · PDF/PNG/JPG up to 10 MB · reviewed by a PE Teacher</small></div>
-                <label className="achievement-file-picker"><input ref={certificateInputRef} type="file" accept="application/pdf,image/png,image/jpeg" aria-label="Upload achievement certificate" onChange={(event) => { const file = event.target.files?.[0] ?? null; const tooLarge = Boolean(file && file.size > 10 * 1024 * 1024); setCertificate(file && !tooLarge ? file : null); setError(tooLarge ? 'Certificate files must be 10 MB or smaller.' : ''); if (tooLarge && certificateInputRef.current) certificateInputRef.current.value = ''; }} /><span className="achievement-file-picker-button">Choose certificate</span><span className="achievement-file-picker-name">{certificate?.name ?? 'No certificate selected'}</span></label>
-                {certificate && <button className="achievement-file-clear" type="button" onClick={() => { setCertificate(null); if (certificateInputRef.current) certificateInputRef.current.value = ''; }}>Remove certificate</button>}
-              </div>
-            </div>
+            <div className="achievement-upload-step-heading"><span><ImagePlus size={17} /></span><div><b id="achievement-upload-heading">Upload Achievement or Certificate</b><small>Choose an achievement photo/video and optionally its certificate together.</small></div></div>
+            <label className="achievement-file-picker combined-file-picker"><input ref={uploadInputRef} type="file" multiple accept="image/png,image/jpeg,video/mp4,video/webm,application/pdf" aria-label="Upload achievement or certificate" onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              const videos = files.filter((file) => ['video/mp4', 'video/webm'].includes(file.type));
+              const images = files.filter((file) => ['image/png', 'image/jpeg'].includes(file.type));
+              const pdf = files.find((file) => file.type === 'application/pdf') ?? null;
+              const selectedMedia = videos[0] ?? images[0] ?? null;
+              const imageCertificate = images[videos.length ? 0 : 1] ?? null;
+              const selectedCertificate = pdf ?? imageCertificate;
+              let uploadError = '';
+              if (files.length > 2 || videos.length > 1 || images.length > 2 || (videos.length > 0 && images.length > 1)) {
+                uploadError = 'Choose an achievement photo or video and at most one certificate.';
+              } else if (selectedMedia) {
+                uploadError = achievementMediaError(selectedMedia);
+              }
+              if (!uploadError && selectedCertificate && selectedCertificate.size > 10 * 1024 * 1024) {
+                uploadError = 'Certificate files must be 10 MB or smaller.';
+              }
+              setMedia(uploadError ? null : selectedMedia);
+              setCertificate(uploadError ? null : selectedCertificate);
+              setError(uploadError || (!selectedMedia && selectedCertificate ? 'Include an achievement photo or video to attach its certificate.' : ''));
+              if (uploadError && uploadInputRef.current) uploadInputRef.current.value = '';
+            }} required /><span className="achievement-file-picker-button">Choose files</span><span className="achievement-file-picker-name">{[media?.name, certificate?.name].filter(Boolean).join(' · ') || 'No achievement or certificate selected'}</span></label>
+            <span className="field-hint">Required: achievement photo/video (PNG/JPG up to 2 MB, MP4/WebM up to 25 MB). Optional: certificate (PDF/image up to 10 MB). Select both files together if attaching a certificate.</span>
+            {(media || certificate) && <button className="achievement-file-clear" type="button" onClick={() => { setMedia(null); setCertificate(null); if (uploadInputRef.current) uploadInputRef.current.value = ''; }}>Remove selected files</button>}
           </section>          {mediaPreview && <div className="achievement-photo-preview">{media?.type.startsWith('video/') ? <video src={mediaPreview} controls muted playsInline /> : <img src={mediaPreview} alt="Achievement preview" />}<span><ImagePlus size={14} /> Ready to upload</span></div>}
           <div className="achievement-compose-footer">
             <label className="field-label">DATE <span className="field-hint">Optional</span><input type="date" className="tabular-nums" value={eventDate} onChange={(event) => setEventDate(event.target.value)} max={new Date().toISOString().slice(0, 10)} /></label>
