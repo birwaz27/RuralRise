@@ -180,9 +180,7 @@ router.get('/:id/certificate', requireAuth, async (req: AuthenticatedRequest, re
     const teacher = await User.findById(req.authUser!.id).select('isVerified district');
     allowed ||= teacher?.isVerified === true && !!teacher.district && teacher.district.trim().toLowerCase() === profile.district.trim().toLowerCase();
   } else if (req.authUser!.role === 'host') {
-    const scout = await User.findById(req.authUser!.id).select('isVerified hostVerificationStatus');
-    const verified = scout?.isVerified === true || scout?.hostVerificationStatus === 'verified';
-    const event = verified ? await Event.exists({ createdBy: req.authUser!.id, 'applicants.player': profile._id }) : null;
+    const event = await Event.exists({ createdBy: req.authUser!.id, 'applicants.player': profile._id });
     allowed ||= Boolean(event);
   }
   if (!allowed) throw new HttpError(403, 'FORBIDDEN', 'You do not have permission to view this certificate.');

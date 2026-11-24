@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, MapPin, Plus, ShieldCheck } from 'lucide-react';
+import { ArrowRight, CalendarDays, MapPin, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError, type ScoutEvent } from '../api';
@@ -17,7 +17,7 @@ export default function Events() {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
-  const canCreate = user?.role === 'host' && (user.isVerified || user.hostVerificationStatus === 'verified');
+  const canCreate = user?.role === 'host';
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -39,9 +39,8 @@ export default function Events() {
   }
 
   return <div className="container events-page">
-    <div className="events-heading"><div><span className="eyebrow">SCOUTING CALENDAR</span><h1>Find your next<br />big opportunity.</h1><p>Local trials and events posted by verified Scouts.</p></div><button className="button button-outline" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>Refresh events</button></div>
+    <div className="events-heading"><div><span className="eyebrow">SCOUTING CALENDAR</span><h1>Find your next<br />big opportunity.</h1><p>Local trials and events posted by Scouts.</p></div><button className="button button-outline" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>Refresh events</button></div>
     {error && <div className="form-error" role="alert">{error}</div>}{notice && <div className="form-success" role="status">{notice}</div>}
-    {user?.role === 'host' && !canCreate && <div className="verification-notice"><ShieldCheck size={20} /><p>Your Scout account must be verified before you can publish events.</p></div>}
     {canCreate && <details className="event-create-panel"><summary><Plus size={17} /> Post a new event</summary><form className="event-form" onSubmit={createEvent}>
       <label className="field-label">EVENT TITLE<input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={120} required /></label>
       <div className="form-row"><label className="field-label">SPORT<input value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })} maxLength={80} required /></label><label className="field-label">LOCATION<input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} maxLength={180} required /></label></div>

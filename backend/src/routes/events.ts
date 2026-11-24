@@ -4,7 +4,6 @@ import { requireAuth, type AuthenticatedRequest } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
 import { AthleteProfile } from '../models/AthleteProfile.js';
 import { Event } from '../models/Event.js';
-import { User } from '../models/User.js';
 import { AchievementPost } from '../models/AchievementPost.js';
 import { HttpError, sendSuccess } from '../utils/http.js';
 
@@ -23,14 +22,6 @@ const reviewSchema = z.object({
   sponsorshipNote: z.string().trim().max(300).optional(),
 }).refine((value) => Object.keys(value).length > 0);
 const applySchema = z.object({ message: z.string().trim().max(500).optional().default('') });
-
-async function requireVerifiedScout(userId: string) {
-  const scout = await User.findById(userId).select('role hostVerificationStatus isVerified');
-  if (!scout || scout.role !== 'host' || !(scout.isVerified || scout.hostVerificationStatus === 'verified')) {
-    throw new HttpError(403, 'VERIFIED_SCOUT_REQUIRED', 'Only verified Scouts can manage events.');
-  }
-  return scout;
-}
 
 function serializeEvent(event: any, includeApplicants = false) {
   const value = event.toObject ? event.toObject() : event;
@@ -68,7 +59,7 @@ router.get('/', requireAuth, async (req: AuthenticatedRequest, res) => {
 });
 
 router.post('/', requireAuth, validateBody(createSchema), async (req: AuthenticatedRequest, res) => {
-  await requireVerifiedScout(req.authUser!.id);
+  if (req.authUser!.role !== 'host') throw new HttpError(403, 'SCOUT_REQUIRED', 'Only Scout accounts can create events.');
   const input = req.body as z.infer<typeof createSchema>;
   const deadline = new Date(input.registrationDeadline);
   const eventDate = new Date(input.eventDate);
@@ -127,7 +118,7 @@ router.post('/:id/apply', requireAuth, async (req: AuthenticatedRequest, res) =>
 });
 
 router.patch('/:id/applicants/:playerId', requireAuth, validateBody(reviewSchema), async (req: AuthenticatedRequest, res) => {
-  await requireVerifiedScout(req.authUser!.id);
+  if (req.authUser!.role !== 'host') throw new HttpError(403, 'SCOUT_REQUIRED', 'Only Scout accounts can review applicants.');
   const { id, playerId } = req.params;
   if (typeof id !== 'string' || !idPattern.test(id) || typeof playerId !== 'string' || !idPattern.test(playerId)) {
     throw new HttpError(400, 'INVALID_ID', 'The supplied event or player ID is invalid.');
